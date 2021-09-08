@@ -18,7 +18,7 @@ df = pd.read_excel(path+'TEST ANALYSIS Dec_2018.xlsx', nrows=16, header=(0,1), s
 df['Dec_2018'].loc[:,('VT1 (GET)', 'VO2%max')] /= 100
 df['Dec_2018'].loc[:,('VT1 (GET)', '%HRmax')] /= 100
 df['Dec_2018'].loc[:,('VT1 (GET)', '%Wmax')] /= 100
-df['Dec_2018'].loc[:,('VT2 (GET)', 'VO2%max')] /= 100
+df['Dec_2018'].loc[:,('VT2 (RCP)', 'VO2%max')] /= 100
 df['Dec_2018'].loc[:,('VT2 (RCP)', '%HRmax')] /= 100
 df['Dec_2018'].loc[:,('VT2 (RCP)', '%Wmax')] /= 100
 
