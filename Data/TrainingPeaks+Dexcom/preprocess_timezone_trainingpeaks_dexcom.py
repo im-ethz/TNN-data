@@ -65,7 +65,6 @@ path_tp = '../TrainingPeaks/2019/timezone/'
 if not os.path.exists(path+'timezone/'):
 	os.mkdir(path+'timezone/')
 
-
 # ------------------------- Create file with changes observed from dexcom -------------------------
 # trainingpeaks
 df_tp = pd.read_csv(path_tp+'timezone_final.csv', index_col=[0,1])
@@ -150,7 +149,7 @@ def keep_second(df, i, n):
 	df.drop((i,n[1]), inplace=True)
 	return df
 
-def replace_row(dc, tp, i, n_dc:int, n_tp:list, keep_tz=False):
+def replace_row(dc, tp, i, n_dc:int, n_tp:list, keep_first=False, keep_last=False):
 	row = dc.loc[(i,n_dc)]
 	next_rows = dc[(dc.index.get_level_values(0) == i) & (dc.index.get_level_values(1) > n_dc)]
 
@@ -159,14 +158,14 @@ def replace_row(dc, tp, i, n_dc:int, n_tp:list, keep_tz=False):
 
 	for j, n in enumerate(n_tp):
 		dc.loc[(i,n_dc+j), 'timezone'] = tp.loc[(i,n), 'timezone']
-		if j == 0 and keep_tz:
+		if j == 0 and keep_first:
 			dc.loc[(i,n_dc+j), 'timestamp_min'] = row['timestamp_min']
 			dc.loc[(i,n_dc+j), 'local_timestamp_min'] = row['local_timestamp_min']
 		else:
 			dc.loc[(i,n_dc+j), 'timestamp_min'] = tp.loc[(i,n), 'timestamp_min']
 			dc.loc[(i,n_dc+j), 'local_timestamp_min'] = tp.loc[(i,n), 'local_timestamp_min']
 
-		if j == len(n_tp) - 1 and keep_tz:
+		if j == len(n_tp) - 1 and keep_last:
 			dc.loc[(i,n_dc+j), 'timestamp_max'] = row['timestamp_max']
 			dc.loc[(i,n_dc+j), 'local_timestamp_max'] = row['local_timestamp_max']
 		else:
@@ -175,6 +174,22 @@ def replace_row(dc, tp, i, n_dc:int, n_tp:list, keep_tz=False):
 
 	for (i,n), n_row in next_rows.iterrows():
 		dc.loc[(i,n+len(n_tp)-1),:] = n_row
+
+	return dc
+
+def insert_row(dc, tp, i, n_dc:int, n_tp:list):
+	prev_row = dc.loc[(i,n_dc)]
+	next_rows = dc[(dc.index.get_level_values(0) == i) & (dc.index.get_level_values(1) > n_dc)]
+
+	dc.drop(next_rows.index, inplace=True)
+
+	# insert rows
+	for j, n in enumerate(n_tp):
+		dc.loc[(i,n_dc+j+1),:] = tp.loc[(i,n)]
+
+	# paste next rows after insert rows
+	for (i,n), n_row in next_rows.iterrows():
+		dc.loc[(i,n+len(n_tp)),:] = n_row
 
 	return dc
 
@@ -196,6 +211,8 @@ def check_minmax(dc, tp, n_dc, n_tp=None):
 		" earlier ",
 		dc.loc[n_dc, 'timestamp_min'].date() < tp.loc[n_tp, 'date_min'],
 		dc.loc[n_dc, 'timestamp_max'].date() < tp.loc[n_tp, 'date_max'])
+
+df_changes['source'] = 'Dexcom'
 
 # ------------------------- rider 1
 # device changes (that were still set back in time)
@@ -222,7 +239,11 @@ for n in range(n_max[1]):
 # CHECK if timezones are correct
 # 2,9 is censored in dexcom
 
+# add last missing change from trainingpeaks due to censoring dexcom
+df_changes = insert_row(df_changes, df_tp, 2, 8, [9])
+
 # CHECK if timestamp of timezone changes are correct
+n_max = df_changes.groupby('RIDER')['timezone'].count()
 for n in range(n_max[2]):
 	check_minmax(df_changes, df_tp, (2,n))
 
@@ -238,20 +259,19 @@ df.loc[(df.RIDER == 3) & (df['censoring'] > '6min') \
 	& (df.timestamp >= '2018-12-01 04:41:40') & (df.timestamp <= '2019-03-31 00:52:42')]
 df.loc[144743:144744, 'timestamp']
 # Note that this is because of censoring between 2018-12-12 and 2019-01-14
+df_changes = replace_row(df_changes, df_tp, 3, 0, [0,1,2], keep_first=True, keep_last=True)
 
 # Missing travelling from +2 to +8 and back between 2019-05-21 and 2019-06-02
 df.loc[(df.RIDER == 3) & (df['censoring'] > '6min') \
 	& (df.timestamp >= '2019-03-31 00:00:00') & (df.timestamp <= '2019-06-18 00:00:00')]
 df.loc[150197:150198, 'timestamp']
 # Note that this is because of censoring between 2019-04-05 and 2019-06-11
+df_changes = replace_row(df_changes, df_tp, 3, 3, [3,4,5], keep_first=True, keep_last=True)
 
 # CHECK if timestamp of timezone changes are correct
-check_minmax(df_changes, df_tp, (3,0), (3,0))
-check_minmax(df_changes, df_tp, (3,0), (3,2))
-check_minmax(df_changes, df_tp, (3,1), (3,3))
-check_minmax(df_changes, df_tp, (3,1), (3,5))
-for n in range(2,n_max[1]):
-	check_minmax(df_changes, df_tp, (3,n), (3,n+4))
+n_max = df_changes.groupby('RIDER')['timezone'].count()
+for n in range(n_max[3]):
+	check_minmax(df_changes, df_tp, (3,n))
 
 # CONCLUSION timezone change automatically
 # Only between 6-10 and 7-11 is too late, but maybe there's a mistake with the TrainingPeaks file there?
@@ -280,36 +300,25 @@ df.loc[217164:217165, 'timestamp']
 # Note that this is because of censoring between:
 # - 2019-04-15 and 2019-05-09
 # - 2019-05-15 and 2019-09-04
+df_changes = replace_row(df_changes, df_tp, 4, 9, [6,7,8], keep_first=True, keep_last=True)
 
-# CHECK if timestamp of timezone changes are correct
-check_minmax(df_changes, df_tp, (4,0), (4,0))
-check_minmax(df_changes, df_tp, (4,1), (4,1))
-check_minmax(df_changes, df_tp, (4,5), (4,2))
-check_minmax(df_changes, df_tp, (4,6), (4,3))
-check_minmax(df_changes, df_tp, (4,7), (4,4))
-check_minmax(df_changes, df_tp, (4,8), (4,5))
-check_minmax(df_changes, df_tp, (4,9), (4,6))
-check_minmax(df_changes, df_tp, (4,11), (4,9))
-check_minmax(df_changes, df_tp, (4,12), (4,10)) # NOTE
-check_minmax(df_changes, df_tp, (4,13), (4,10)) # NOTE
-check_minmax(df_changes, df_tp, (4,14), (4,11)) # NOTE
-check_minmax(df_changes, df_tp, (4,27), (4,11)) # NOTE
-check_minmax(df_changes, df_tp, (4,28), (4,12))
-
-# CONCLUSION timezone change automatically (?)
-# In any case check since there were so many small deviations
-
-# ROUND OFF
 # recalculate n
+df_changes = df_changes.sort_index()
 df_changes.reset_index(inplace=True)
 df_changes['n'] = df_changes.groupby('RIDER').cumcount()
 df_changes.set_index(['RIDER', 'n'], inplace=True)
 n_max = df_changes.groupby('RIDER')['timezone'].count()
 
-# round off (because the real time zones are also in whole hours)
-for n in range(7,13):
-	df_changes.loc[(4,n), 'timezone'] = df_changes.loc[(4,n), 'timezone'].round('h')
+# CHECK if timestamp of timezone changes are correct
+for n in range(n_max[4])[:11]:
+	check_minmax(df_changes, df_tp, (4,n))
 
+# CONCLUSION timezone change automatically (?)
+# In any case check since there were so many small deviations
+
+# round off (because the real time zones are also in whole hours)
+for n in range(10,15):
+	df_changes.loc[(4,n), 'timezone'] = df_changes.loc[(4,n), 'timezone'].round('h')
 
 # ------------------------- rider 5
 
@@ -447,7 +456,7 @@ df_changes = keep_second(df_changes, 12, [0,1])
 
 df_changes = replace_row(df_changes, df_tp, 12, 0, [0,1,2,3,4,5,6,7,8,9,10])
 
-df_changes = delete_rows(df_changes, 12, [4,5,6,7,8,9])
+#df_changes = delete_rows(df_changes, 12, [4,5,6,7,8,9])
 
 # change to winter time that was not included in the data
 df_changes.loc[(12,10), 'timezone'] -= pd.to_timedelta('1h') 
@@ -497,8 +506,8 @@ check_minmax(df_changes, df_tp, (13,12), (13,11))
 df_changes = replace_row(df_changes, df_tp, 14, 0, np.arange(10))
 df_changes = replace_row(df_changes, df_tp, 14, 10, np.arange(10, 20))
 
-df_changes = delete_rows(df_changes, 14, [5,6,7])
-df_changes = delete_rows(df_changes, 14, [15,16])
+#df_changes = delete_rows(df_changes, 14, [5,6,7])
+#df_changes = delete_rows(df_changes, 14, [15,16])
 
 # CONCLUSION timezone change manually
 
@@ -512,6 +521,8 @@ for n in range(8):
 df.loc[(df.RIDER == 15) & (df['censoring'] > '6min') \
 	& (df.timestamp >= '2019-01-27 00:00:00') & (df.timestamp <= '2019-07-21 23:59:59'),
 	['local_timestamp', 'timestamp', 'censoring', 'timezone', 'timestamp_shift']]
+df_changes = replace_row(df_changes, df_tp, 15, 0, [0,1,2,3,4,5,6,7], keep_first=True, keep_last=False)
+df_changes = keep_second(df_changes, 15, [7,8])
 
 # I think the last ones from 15,5 to 15,7 are incorrect
 # check if we did not miss any change when he changed his transmitter
@@ -537,8 +548,9 @@ df.loc[(df.RIDER == 15) & (df['censoring'] > '6min') \
 
 # TODO: if the timezone turns out to be incorrect, make sure to change it also in the glucose data
 
-df_changes = delete_rows(df_changes, 15, [6])
-df_changes.loc[(15,7), 'timezone'] += pd.to_timedelta('1days')
+df_changes = keep_second(df_changes, 15, [12,13])
+df_changes.loc[(15,12), 'timezone'] += pd.to_timedelta('1days')
+df_changes.loc[(15,14), 'timezone'] += pd.to_timedelta('1days')
 
 check_minmax(df_changes, df_tp, (15,0), (15,0))
 check_minmax(df_changes, df_tp, (15,1), (15,7))
@@ -548,8 +560,8 @@ check_minmax(df_changes, df_tp, (15,4), (15,8))
 
 # CONCLUSION timezone change manually
 
-
 df_changes = df_changes.sort_index()
+df_changes['source'] = df_changes['source'].fillna('TrainingPeaks')
 
 df_changes.to_csv(path+'timezone/dexcom_changes2.csv')
 # Note: This file is used for the MANUAL addition of actual timezone changes underneath
@@ -1664,26 +1676,27 @@ df.loc[(df.RIDER == 15)	& (df.timestamp >= '2019-10-16 16:00:00'),
 # Note: for the last changes, we do not have any data any more. We don't have any data from cycling
 # neither any data from his calendar. It seems he just went on holiday here. So now leave it as it is, and then see.
 
+# TODO: note we manually had to add a timezone entry at the beginning of athlete 10
+
 del df, df_tp, df_changes ; gc.collect()
 
 # ------------------ final file compilation
+df_changes = pd.read_csv(path+'timezone/dexcom_trainingpeaks_changes_manual.csv', index_col=[0,1])
+df_changes.drop(['index', 'Source Device ID', 'Transmitter ID', 'device_change', 'transmitter_change', 
+	'trust_time', 'censored', 'problem'], axis=1, inplace=True)
 
-# note that this file was called df_changes before (TODO: maybe clean up code and rename)
-df_dc = pd.read_csv(path+'timezone/dexcom_changes_manual.csv', index_col=[0,1])
-df_dc.drop(['index', 'Source Device ID', 'Transmitter ID', 'device_change', 'transmitter_change', 
-	'trust_time'], axis=1, inplace=True)
+df_changes.drop(['timestamp_min', 'timestamp_max', 'local_timestamp_min', 'local_timestamp_max',
+	'actual_min_dexcom', 'actual_max_dexcom'], axis=1, inplace=True)
+df_changes.rename(columns={'actual_min_tp':'timestamp_min', 'actual_max_tp':'timestamp_max'}, inplace=True)
 
-df_dc.drop(['timestamp_min', 'timestamp_max', 'local_timestamp_min', 'local_timestamp_max'], axis=1, inplace=True)
-df_dc.rename(columns={'actual_min':'timestamp_min', 'actual_max':'timestamp_max'}, inplace=True)
+df_changes.timezone = pd.to_timedelta(df_changes.timezone)
+df_changes.timestamp_min = pd.to_datetime(df_changes.timestamp_min)
+df_changes.timestamp_max = pd.to_datetime(df_changes.timestamp_max)
 
-df_dc.timezone = pd.to_timedelta(df_dc.timezone)
-df_dc.timestamp_min = pd.to_datetime(df_dc.timestamp_min)
-df_dc.timestamp_max = pd.to_datetime(df_dc.timestamp_max)
+df_changes['local_timestamp_min'] = df_changes.timestamp_min + df_changes.timezone
+df_changes['local_timestamp_max'] = df_changes.timestamp_max + df_changes.timezone
 
-df_dc['local_timestamp_min'] = df_dc.timestamp_min + df_dc.timezone
-df_dc['local_timestamp_max'] = df_dc.timestamp_max + df_dc.timezone
-
-df_dc.to_csv(path+'timezone/dexcom_changes_final.csv')
+df_changes.to_csv(path+'timezone/timezone_changes_final.csv')
 
 # ------------------ create check file for Kristina
 df_changes = pd.read_csv(path+'timezone/trainingpeaks_dexcom_changes_manual.csv', index_col=[0,1])
