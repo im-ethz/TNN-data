@@ -13,6 +13,16 @@ path = './'
 rider_mapping = {k.upper() : v for k, v in rider_mapping.items()}
 
 df = pd.read_excel(path+'TEST ANALYSIS Dec_2018.xlsx', nrows=16, header=(0,1), sheet_name=None)
+
+# make sure all tabs are using the same units
+df['Dec_2018'].loc[:,('VT1 (GET)', 'VO2%max')] /= 100
+df['Dec_2018'].loc[:,('VT1 (GET)', '%HRmax')] /= 100
+df['Dec_2018'].loc[:,('VT1 (GET)', '%Wmax')] /= 100
+df['Dec_2018'].loc[:,('VT2 (GET)', 'VO2%max')] /= 100
+df['Dec_2018'].loc[:,('VT2 (RCP)', '%HRmax')] /= 100
+df['Dec_2018'].loc[:,('VT2 (RCP)', '%Wmax')] /= 100
+
+# combine all tabs
 df = pd.concat(df)
 
 # clean up columns
