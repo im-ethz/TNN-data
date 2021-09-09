@@ -68,15 +68,15 @@ config.py
 /Data/TrainingPeaks+LibreView/raw/*
 /Data/TrainingPeaks+LibreView/_bin/*
 
-/Data/CampCalifornia/*
+/Data/camp_california/*
 
-/Data/Calendar/*.csv
-/Data/Calendar/*.xls
+/Data/calendar/*.csv
+/Data/calendar/*.xls
 
-/Data/Fitness/fitness_analysis_2019_anonymous.csv
-/Data/Fitness/TEST ANALYSIS Dec_2018.xlsx
+/Data/fitness/fitness_analysis_2019_anonymous.csv
+/Data/fitness/TEST ANALYSIS Dec_2018.xlsx
 
-/Data/Info/*
+/Data/info/*
 
 /Data/_archive/*
 
