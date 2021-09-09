@@ -21,6 +21,8 @@
 */__pycache__/
 *.pyc
 
+config.py
+
 /Data/Dexcom/*.csv
 /Data/Dexcom/TNN_CGM_2019_EU_exported_20210224.xlsx
 /Data/Dexcom/_bin/*
@@ -37,6 +39,7 @@
 
 /Data/TrainingPeaks/2019/glucose/*
 /Data/TrainingPeaks/2019/timezone/*
+/Data/TrainingPeaks/2019/clean3/*
 /Data/TrainingPeaks/2019/clean2/*
 /Data/TrainingPeaks/2019/clean/*
 /Data/TrainingPeaks/2019/combine/*
@@ -76,3 +79,6 @@
 /Data/info/*
 
 /Data/_archive/*
+
+/Data/FINAL/*.csv
+/Data/FINAL/*.xls
