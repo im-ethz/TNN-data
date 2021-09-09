@@ -7,7 +7,7 @@ Note: getting home locations for Zwift does not seem to work, they seem to take 
 """
 import os
 import sys
-sys.path.append(os.path.abspath('../../../'))
+sys.path.append(os.path.abspath('../../'))
 
 import numpy as np
 import pandas as pd

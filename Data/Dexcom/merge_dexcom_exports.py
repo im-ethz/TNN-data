@@ -1,7 +1,7 @@
 import os
 import gc
 import sys
-sys.path.append(os.path.abspath('../../'))
+sys.path.append(os.path.abspath('../'))
 
 import numpy as np
 import pandas as pd

@@ -4,7 +4,7 @@
 # TODO: THE SORTING PROBABLY DOESN"T WORK
 import os
 import sys
-sys.path.append(os.path.abspath('../../../'))
+sys.path.append(os.path.abspath('../../'))
 
 import numpy as np
 import pandas as pd
@@ -39,10 +39,6 @@ if not os.path.exists(path+'clean2/'):
 	os.mkdir(path+'clean2/')
 if not os.path.exists(path+'clean3/'):
 	os.mkdir(path+'clean3/')
-if not os.path.exists(path+'agg_session/'):
-	os.mkdir(path+'agg_session/')
-if not os.path.exists(path+'agg_day/'):
-	os.mkdir(path+'agg_day/')
 
 verbose = 2
 

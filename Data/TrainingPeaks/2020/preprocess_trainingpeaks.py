@@ -5,7 +5,7 @@
 # TODO: there is something wrong with df['duplicate_timestamp']!!! Because it's not actually equal to df.local_timestamp.duplicated()
 import os
 import sys
-sys.path.append(os.path.abspath('../../../'))
+sys.path.append(os.path.abspath('../../'))
 
 import numpy as np
 import pandas as pd

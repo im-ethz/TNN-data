@@ -14,7 +14,7 @@ from selenium.webdriver.common.keys import Keys
 #from selenium.webdriver.support import expected_conditions as EC
 import time
 
-download_path = '/local/home/evanweenen/bicyclediabetes/Code/Data/TrainingPeaks/2019/'
+download_path = '/local/home/evanweenen/hypex-data/TrainingPeaks/2019/'
 
 url_login = 'https://home.trainingpeaks.com/login'
 

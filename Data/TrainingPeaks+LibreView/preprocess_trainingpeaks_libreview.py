@@ -13,7 +13,7 @@
 # - IDEA: smooth instead of resampling for more data
 import os
 import sys
-sys.path.append(os.path.abspath('../../'))
+sys.path.append(os.path.abspath('../'))
 
 import numpy as np
 import scipy as sp
