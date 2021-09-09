@@ -1698,6 +1698,7 @@ df_changes['local_timestamp_max'] = df_changes.timestamp_max + df_changes.timezo
 
 df_changes.to_csv(path+'timezone/timezone_changes_final.csv')
 
+"""
 # ------------------ create check file for Kristina
 df_changes = pd.read_csv(path+'timezone/trainingpeaks_dexcom_changes_manual.csv', index_col=[0,1])
 
@@ -1747,3 +1748,4 @@ df_changes = df_changes[['RIDER', 'date_trainingpeaks_min', 'date_trainingpeaks_
 						'local_timestamp_max', 'certainty', 'timezone', 'country_min', 'country_max']]
 
 df_changes.to_csv(path+'timezone/travel_check_Kristina.csv')
+"""
