@@ -384,7 +384,7 @@ df.to_csv(path+'dexcom_utc.csv')
 # --------------------- RUN preprocess_timezone_trainingpeaks_dexcom.py here
 
 # --------------------------------- UTC to local
-df_changes = pd.read_csv('../TrainingPeaks+Dexcom/timezone/dexcom_changes_final.csv', index_col=[0,1])
+df_changes = pd.read_csv('../TrainingPeaks+Dexcom/timezone/timezone_changes_final.csv', index_col=[0,1])
 
 df_changes.timezone = pd.to_timedelta(df_changes.timezone)
 df_changes.timestamp_min = pd.to_datetime(df_changes.timestamp_min)
@@ -399,7 +399,7 @@ df.timestamp = pd.to_datetime(df.timestamp)
 # recalculate local timestamp
 df.rename(columns={'local_timestamp':'local_timestamp_raw'}, inplace=True)
 
-for (i,n), (tz, ts_min, ts_max, _, _) in df_changes.iterrows():
+for (i,n), (tz, _, _, ts_min, ts_max, _, _) in df_changes.iterrows():
 	mask_tz = (df.RIDER == i) & (df.timestamp >= ts_min) & (df.timestamp <= ts_max)
 	df.loc[mask_tz, 'local_timestamp'] = df.loc[mask_tz, 'timestamp'] + tz
 
