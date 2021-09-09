@@ -37,6 +37,12 @@ if not os.path.exists(path+'clean/'):
 	os.mkdir(path+'clean/')
 if not os.path.exists(path+'clean2/'):
 	os.mkdir(path+'clean2/')
+if not os.path.exists(path+'clean3/'):
+	os.mkdir(path+'clean3/')
+if not os.path.exists(path+'agg_session/'):
+	os.mkdir(path+'agg_session/')
+if not os.path.exists(path+'agg_day/'):
+	os.mkdir(path+'agg_day/')
 
 verbose = 2
 
@@ -388,36 +394,23 @@ for i in athletes:
 
 	del df, df_information
 
-# TODO: check if there are training sessions that should be merged
-# TODO: should we check 
-# second stage cleaning
+# second stage cleaning: local timestamp + glucose
 
-# Note: this is probably going to be renamed later
 # List of actual travels calculated with preprocess_timezone_{trainingpeaks}_{dexcom}.py files
-df_tz = pd.read_csv('../../TrainingPeaks+Dexcom/timezone/travel_check_Kristina.csv', index_col=0)
+df_tz = pd.read_csv('../../TrainingPeaks+Dexcom/timezone/timezone_changes_final.csv', index_col=[0,1])
 
-df_tz.RIDER = df_tz.RIDER.map(rider_mapping)
-df_tz['n'] = df_tz.groupby('RIDER').cumcount()
-
-df_tz.local_timestamp_min = pd.to_datetime(df_tz.local_timestamp_min)
-df_tz.local_timestamp_max = pd.to_datetime(df_tz.local_timestamp_max)
+df_tz.timestamp_min = pd.to_datetime(df_tz.timestamp_min)
+df_tz.timestamp_max = pd.to_datetime(df_tz.timestamp_max)
 df_tz.timezone = pd.to_timedelta(df_tz.timezone)
 
-df_tz['timestamp_min'] = df_tz['local_timestamp_min'] - df_tz['timezone']
-df_tz['timestamp_max'] = df_tz['local_timestamp_max'] - df_tz['timezone']
+df_tz = df_tz[['timestamp_min', 'timestamp_max', 'timezone']]
 
-df_tz = df_tz[['RIDER', 'n', 'timestamp_min', 'timestamp_max', 'timezone']]
-df_tz.set_index(['RIDER', 'n'], inplace=True)
-
-# Read in dexcom glucose
-df_dc = pd.read_csv('../../Dexcom/dexcom_clean_sections.csv', index_col=0)
+# Glucose data
+df_dc = pd.read_csv('../../Dexcom/dexcom_clean.csv', index_col=0)
 df_dc.timestamp = pd.to_datetime(df_dc.timestamp)
 df_dc.local_timestamp = pd.to_datetime(df_dc.local_timestamp)
 
 athletes = sorted([int(i.rstrip('.csv')) for i in os.listdir(path+'clean/')])
-
-if not os.path.exists(path+'glucose/'):
-	os.mkdir(path+'glucose/')
 
 for i in athletes:
 	print("\n------------------------------- Athlete ", i)
@@ -436,81 +429,99 @@ for i in athletes:
 	# calculate correct local timestamp
 	print("\n-------- calculate correct local timestamp")
 	for n, (ts_min, ts_max, tz) in df_tz.loc[i].iterrows():
-		if pd.isnull(ts_min):
-			ts_min = pd.to_datetime('2018-11-30 00:00:00')
-		if pd.isnull(ts_max):
-			ts_max = pd.to_datetime('2019-12-01 23:59:59')
-
 		ts_mask = (df.timestamp >= ts_min) & (df.timestamp <= ts_max)
 		df.loc[ts_mask, 'local_timestamp'] = df.loc[ts_mask, 'timestamp'] + tz
 
 	# get glucose out of trainingpeaks files
-	print("\n-------- export glucose")
-	#df_glucose = df[['timestamp', 'local_timestamp', 'local_timestamp_loc', 'error_local_timestamp', 'file_id', 'device_0', 'glucose']]
+	print("\n-------- export glucose to dexcom")
 	df_glucose = df.dropna(subset=['glucose'])
-	df_glucose.to_csv(path+'clean2/'+str(i)+'/'+str(i)+'_glucose.csv', index_label=False)
+	df.drop('glucose', axis=1, inplace=True)
+	df_glucose = df_glucose[['timestamp', 'local_timestamp', 'glucose']]
 
-	# find out where the glucose belongs
+	df_glucose['RIDER'] = i
+	df_glucose['Event Type'] = 'EGV'
+	df_glucose['source'] = 'TrainingPeaks'
 
-	matplotlib.use('TkAgg')
-	df_glucose['date'] = df_glucose.timestamp.dt.date
-	for d in df_glucose['date'].unique():
-		fig, ax = plt.subplots(figsize=(15,6))
-		mask = (df_dc.RIDER == i) & (df_dc['timestamp'].dt.date == d)
-		sns.lineplot(df_dc.loc[mask, 'timestamp'], df_dc.loc[mask, 'Glucose Value (mg/dL)'], 
-			ax=ax, marker='o', dashes=False, label='Dexcom', alpha=.8)
+	assert (df_glucose['glucose'] < 39).sum() == 0 # ensure that glucose units are mg/dl
+	df_glucose.rename(columns={'glucose':'Glucose Value (mg/dL)'}, inplace=True)
 
-		sns.lineplot(df_glucose.loc[df_glucose['date'] == d, 'timestamp'],
-				df_glucose.loc[df_glucose['date'] == d, 'glucose'], 
-				ax=ax, marker='o', dashes=False, label='TP', alpha=.8)
+	df_dc = df_dc.append(df_glucose)
+	df.to_csv(path+'clean2/'+str(i)+'/'+str(i)+'_data.csv', index_label=False)
 
-		ax.set_xticklabels(pd.to_datetime(ax.get_xticks(), unit='D').strftime('%H:%M'))
-		plt.xlabel('UTC (hh:mm)')
+	print("\n-------- identify training sessions in dexcom")
+	df_training = df.groupby('file_id').agg({'timestamp':['min', 'max']})
 
-		plt.title("RIDER %s - %s"%(i, d.strftime('%d-%m-%Y')))
-		plt.savefig(path+'glucose/glucose_%s_%s.pdf'%(i,d.strftime('%Y%m%d')), bbox_inches='tight')
-		plt.savefig(path+'glucose/glucose_%s_%s.png'%(i,d.strftime('%Y%m%d')), dpi=300, bbox_inches='tight')
-		
-		plt.title("%s - %s"%(rider_mapping_inv[i], d.strftime('%d-%m-%Y')))
-		plt.savefig(path+'glucose/glucose_%s_%s_NAME.pdf'%(i,d.strftime('%Y%m%d')), bbox_inches='tight')
-		plt.savefig(path+'glucose/glucose_%s_%s_NAME.png'%(i,d.strftime('%Y%m%d')), dpi=300, bbox_inches='tight')
+	for n, (ts_min, ts_max) in df_training.iterrows():
+		ts_mask = (df_dc.timestamp >= ts_min) & (df_dc.timestamp <= ts_max)
+		df_dc.loc[ts_mask, 'training'] = True
 
-		plt.close()
+	del df, df_glucose, df_training ; gc.collect()
+
+df_dc.sort_values(['RIDER', 'timestamp'], inplace=True)
+
+df_dc.to_csv('../../Dexcom/dexcom_clean2.csv', index_label=0)
+
+del df_dc ; gc.collect()
+
+# third stage cleaning: cleaning features
+
+athletes = sorted([int(i.rstrip('.csv')) for i in os.listdir(path+'clean2/')])
+
+for i in athletes:
+	print("\n------------------------------- Athlete ", i)
+
+	if not os.path.exists(path+'clean3/'+str(i)):
+		os.mkdir(path+'clean3/'+str(i))
+
+	df = pd.read_csv(path+'clean2/'+str(i)+'/'+str(i)+'_data.csv', index_col=0)
+
+	df['timestamp'] = pd.to_datetime(df['timestamp'])
+	df['local_timestamp'] = pd.to_datetime(df['local_timestamp'])
 
 	print("\n-------- select devices")
 	# select devices
+	# because there is a high percentage of missing values for heart rate
+	# we cannot entirely trust the timestamps on it, we've seen weird things when people use the garmin regarding to the timestamp
+	# therefore better to drop it entirely
+	# note that we do drop ~ roughly 10% of the data in this step
 	devices = set(df.device_0.unique())
 	keep_devices = set(['ELEMNT', 'ELEMNTBOLT', 'ELEMNTROAM', 'ZWIFT'])
-	drop_devices = devices - keep_devices
 
 	print("DROPPED: %s files with %s entries from devices %s"\
-		%(len(df[~df['device_0'].isin(keep_devices)].file_id.unique()), (~df['device_0'].isin(keep_devices)).sum(), drop_devices))
+		%(len(df[~df['device_0'].isin(keep_devices)].file_id.unique()), (~df['device_0'].isin(keep_devices)).sum(), devices - keep_devices))
 	df = df[df['device_0'].isin(keep_devices)]
-	#df.drop(['keep_devices', *list(drop_devices)], axis=1, inplace=True)
 
-	print("\n-------- cleaning features")
-	# -------------------- Empty cols
+	# delete features from these devices that we now don't use anymore
+	print("Percentage of missing values for each features:\n",
+		df.isna().sum() / len(df))
 	empty_cols = ['fractional_cadence', 'time_from_course', 'compressed_speed_distance', 'resistance', 'cycle_length', 'accumulated_power']
 	for col in empty_cols:
 		if col in df:
 			df.drop(col, axis=1, inplace=True)
 			print("DROPPED: ", col, " (empty)")
 
-	# -------------------- Left-right balance
+	print("\n-------- clean features")
+	# -------------------- Time in Training
+	# create column time in training
+	df['time_training'] = np.nan
+	for fid in df.file_id.unique():
+		df.loc[df.file_id == fid, 'time_training'] = df[df.file_id == fid].timestamp - df[df.file_id == fid].timestamp.min()
+	df['time_training'] = df['time_training'] / np.timedelta64(1,'s')
+	print("CREATED: time training")
+
+	# length training
+	length_training = df.groupby('file_id').count().max(axis=1) / 60
+	PlotPreprocess(path+'clean3/'+str(i)+'/', athlete=i).plot_hist(length_training, 'length_training (min)')
+
+	print("Max training length (min): ", length_training.max())
+	print("Number of training sessions that last shorter than 10 min: ", (length_training <= 10).sum())
+	print("Number of training sessions that last shorter than 20 min: ", (length_training <= 20).sum())
+	del length_training
+
+	# -------------------- Left-Right Balance
 	# there are some strings in this column for some reason (e.g. 'mask', 'right')
 	df.left_right_balance = pd.to_numeric(df.left_right_balance, errors='coerce')
 	print("CLEAN: left-right balance")
-
-	# TODO: combined_pedal_smoothness
-
-	# -------------------- Zeros power meter
-	# TODO: figure out what to do with zeros from power meter
-	# CHECK: is the previous value for a nan always a zero: answer NO
-	# CHECK: is the a zero always followed by a nan: answer more NO
-	# Note: sometimes the power is nan if there is a shift in timestamps
-	# Note: zero power often happens for negative grades, so maybe it is actually when they stop pedalling
-	# TODO: ask how this works in real life
-	# TODO: nan seems to happen a lot also on a specific day, remove that file
 
 	# -------------------- Enhanced altitude
 	# check if enhanced_altitude equals altitude
@@ -540,62 +551,34 @@ for i in athletes:
 	print("CREATED: acceleration")
 	# TODO: remove extreme values
 
-	# -------------------- Acceleration
-	df['accumulated_power'] = df.groupby('file_id')['power'].transform(lambda x: x.sum())
-	print("CREATED: accumulated power")
-
-	# -------------------- Time in training
-	# create column time in training
-	df['time_training'] = np.nan
-	for fid in df.file_id.unique():
-		df.loc[df.file_id == fid, 'time_training'] = df[df.file_id == fid].timestamp - df[df.file_id == fid].timestamp.min()
-	df['time_training'] = df['time_training'] / np.timedelta64(1,'s')
-	print("CREATED: time training")
-
-	# length training
-	length_training = df.groupby('file_id').count().max(axis=1) / 60
-	PlotPreprocess('../../../Descriptives/', athlete=i).plot_hist(length_training, 'length_training (min)')
-
-	print("Max training length (min): ", length_training.max())
-	print("Number of trainings that last shorter than 10 min: ", (length_training <= 10).sum())
-	print("Number of trainings that last shorter than 20 min: ", (length_training <= 20).sum())
-	del length_training
-
 	# -------------------- Distance
 	# negative distance diffs (meaning that the athletes is moving backwards)
 	print("CHECK: Negative distance diffs: ", 
 		((df.time_training.diff() == 1) & (df['distance'].diff() < 0)).sum())
 	# only for athlete 10 there are two negative distance diffs
 
-	df.to_csv(path+'clean2/'+str(i)+'/'+str(i)+'_data.csv', index_label=False)
+	df.to_csv(path+'clean3/'+str(i)+'/'+str(i)+'_data.csv', index_label=False)
+
+	# TODO: combined_pedal_smoothness
+	# TODO: zeros in the power meter
 
 	# create pandas profiling report
 	profile = ProfileReport(df, title='pandas profiling report', minimal=True)
-	profile.to_file(path+'clean2/%s/%s_report.html'%(i,i))
+	profile.to_file(path+'clean3/%s/%s_report.html'%(i,i))
 
 	del df
 
-# --------------------- visualize errors
-df = pd.read_csv(path_merge+'trainingpeaks_dexcom.csv', index_col=0)
-df.local_timestamp = pd.to_datetime(df.local_timestamp)
-df.timestamp = pd.to_datetime(df.timestamp)
 
-# error local timestamp
-df_error_ts = df[df['error_local_timestamp'] == True]
-df_error_ts['date'] = df_error_ts.local_timestamp.dt.date
-df_error_ts[['RIDER','date']].drop_duplicates().set_index('RIDER').to_csv(path_merge+'./error_local_ts.csv')
+# TODO: remove training sessions for which one column is missing
 
-# glucose in trainingpeaks
-df['date'] = df.local_timestamp.dt.date
-df[df.glucose.notna()][['RIDER', 'date']].drop_duplicates().set_index('RIDER').to_csv('./tpglucose.csv')
-df[df.glucose.isna()][['RIDER', 'date']].drop_duplicates().set_index('RIDER').to_csv('./notpglucose.csv')
-
-# timezone shift
-df['timezone'] = df.local_timestamp - df.timestamp
-tz_count = df.groupby('RIDER')['timezone'].value_counts()#.apply(lambda x: x.unique())
-tz_count.to_csv('./tz_count.csv')
-
-
+# -------------------- Zeros power meter
+# TODO: figure out what to do with zeros from power meter
+# CHECK: is the previous value for a nan always a zero: answer NO
+# CHECK: is the a zero always followed by a nan: answer more NO
+# Note: sometimes the power is nan if there is a shift in timestamps
+# Note: zero power often happens for negative grades, so maybe it is actually when they stop pedalling
+# TODO: ask how this works in real life
+# TODO: nan seems to happen a lot also on a specific day, remove that file
 
 # TODO: filter out training sessions for which a whole column is missing
 # TODO: remove training sessions for which there is no distance at all
@@ -604,6 +587,7 @@ tz_count.to_csv('./tz_count.csv')
 # TODO: calculate values (statistics) on a training-level
 # TODO: elevation_gain, acceleartion and accumulated power now contain extreme values when a large shift in time is made within a training
 # imputation
+"""
 for i in athletes:
 	print("\n------------------------------- Athlete ", i)
 
@@ -620,7 +604,7 @@ for i in athletes:
 		(df['position_lat'].isna() & df['position_long'].isna()).sum())
 	# not really relevant because we're not going to do anything with it anymore
 
-	"""
+	
 	print("\n-------- Remove first rows mostly nan")
 	# TODO: move this to the next stage
 	# for each file, go over the first rows and check the percentage of nans
@@ -634,7 +618,7 @@ for i in athletes:
 			else:
 				break
 	print("DROPPED: {:g} first rows with more than 75\% nans".format(count_drop_firstrows))
-	"""
+	
 
 	# -------------------- Impute nans
 	# TODO fill up nans with duplicates
@@ -698,3 +682,4 @@ for i in athletes:
 	# TODO: clean more features here, and add some as well
 
 	df.to_csv(path+'clean3/'+str(i)+'/'+str(i)+'_data.csv', index_label=False)
+"""
