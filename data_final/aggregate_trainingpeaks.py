@@ -1,6 +1,7 @@
 # TODO: put features into different modalities
 # TODO: clean out extreme values in script before
 # TODO: first remove training sessions with little info
+# TODO: it seems sth is wrong with removing zeros
 # then remove variables with little info
 # NOTE: aggregation is by LOCAL timestamp date
 import os
@@ -34,7 +35,7 @@ power_zones = FTP.apply(calc_power_zones, axis=1)
 # race calendar
 cal_race = pd.read_csv(path+'calendar.csv', index_col=0)
 cal_race = cal_race[cal_race.type == 'R'] # filter races
-cal_racce.drop('type', axis=1, inplace=True)
+cal_race.drop('type', axis=1, inplace=True)
 
 # travel calendar
 cal_travel = pd.read_csv(path+'travel.csv', index_col=[0,1])
@@ -46,7 +47,6 @@ cal_travel['date_max'] = pd.to_datetime(cal_travel['local_timestamp_max'].dt.dat
 cal_travel = cal_travel[['RIDER', 'date_min', 'date_max']]
 
 # ----------------------- aggregation
-
 df_agg = {}
 
 athletes = set(sorted([int(i.rstrip('.csv').rstrip('_info').rstrip('_data')) for i in os.listdir(path+'trainingpeaks/')]))
@@ -63,6 +63,11 @@ for i in athletes:
 	df_times = df.groupby('date').agg({'timestamp'			: ['min', 'max', 'count'],
 									   'local_timestamp'	: ['min', 'max']})
 	df_times.columns = [c1+'_'+c2 for c1, c2 in df_times.columns]
+
+	# combine pedal smoothness
+	# TODO: check if correct
+	df['combined_pedal_smoothness'].fillna(df['left_pedal_smoothness']*(df['left_right_balance'].clip(0,100)/100)
+		+ df['right_pedal_smoothness']*(1-df['left_right_balance'].clip(0,100)/100), inplace=True)
 
 	# split out columns in ascent and descent
 	df['descent'] = df.groupby('file_id')['altitude'].transform(lambda x: x.interpolate(method='linear').diff() < 0)
