@@ -1,5 +1,8 @@
 # TODO: put features into different modalities
 # TODO: clean out extreme values in script before
+# TODO: first remove training sessions with little info
+# then remove variables with little info
+# NOTE: aggregation is by LOCAL timestamp date
 import os
 import sys
 sys.path.append(os.path.abspath('../'))
@@ -7,11 +10,6 @@ sys.path.append(os.path.abspath('../'))
 import numpy as np
 import pandas as pd
 
-from config import rider_mapping
-rider_mapping_inv = {v:k for k, v in rider_mapping.items()}
-
-from plot import *
-from helper import *
 from calc import calc_hr_zones, calc_power_zones
 from calc import agg_power, agg_zones, agg_stats
 from calc import chronic_training_load, acute_training_load, training_stress_balance
@@ -20,6 +18,7 @@ import gc
 
 path = './data/'
 
+# ----------------------- fitness
 # read in fitness variables
 fitness = pd.read_csv(path+'fitness.csv', index_col=[0,1], header=[0,1])
 
@@ -31,7 +30,24 @@ LTHR = fitness[[("VT2 (RCP)", 'HR')]].loc[pd.IndexSlice[:, 'Jan_2019'],:].reset_
 hr_zones = LTHR.apply(calc_hr_zones, axis=1)
 power_zones = FTP.apply(calc_power_zones, axis=1)
 
-df_agg_day = {}
+# ----------------------- calendar
+# race calendar
+cal_race = pd.read_csv(path+'calendar.csv', index_col=0)
+cal_race = cal_race[cal_race.type == 'R'] # filter races
+cal_racce.drop('type', axis=1, inplace=True)
+
+# travel calendar
+cal_travel = pd.read_csv(path+'travel.csv', index_col=[0,1])
+cal_travel.reset_index(inplace=True)
+cal_travel['local_timestamp_min'] = pd.to_datetime(cal_travel['local_timestamp_min'])
+cal_travel['local_timestamp_max'] = pd.to_datetime(cal_travel['local_timestamp_max'])
+cal_travel['date_min'] = pd.to_datetime(cal_travel['local_timestamp_min'].dt.date) 
+cal_travel['date_max'] = pd.to_datetime(cal_travel['local_timestamp_max'].dt.date - pd.to_timedelta('1d'))
+cal_travel = cal_travel[['RIDER', 'date_min', 'date_max']]
+
+# ----------------------- aggregation
+
+df_agg = {}
 
 athletes = set(sorted([int(i.rstrip('.csv').rstrip('_info').rstrip('_data')) for i in os.listdir(path+'trainingpeaks/')]))
 
@@ -86,9 +102,20 @@ for i in athletes:
 	df_info = pd.read_csv(path+'trainingpeaks/'+str(i)+'_info.csv', index_col=0)
 	df_calos = df_files.join(df_info['total_calories']).groupby('date').sum()
 
-	df_agg_day[i] = pd.concat([df_times, df_zones, df_power, df_calos, df_stats], axis=1)
+	df_agg[i] = pd.concat([df_times, df_zones, df_power, df_calos, df_stats], axis=1)
 
 	del df, df_times, df_zones, df_power, df_calos, df_stats, df_files, df_info
 
-df_agg_day = pd.concat(df_agg_day)
-df_agg_day.to_csv(path+'trainingpeaks_day.csv')
+df_agg = pd.concat(df_agg)
+
+# merge with race info
+df_agg['race'] = False
+for _, (i, d_start, d_end) in cal_race.iterrows():
+	df_agg.loc[(df_agg.RIDER == i) & (df_agg.date >= d_start) & (df_agg.date <= d_end), 'race'] = True
+
+# merge with travel info
+df_agg['travel'] = True
+for _, (i, d_start, d_end) in cal_travel.iterrows():
+	df_agg.loc[(df_agg.RIDER == i) & (df_agg.date > d_start) & (df_agg.date < d_end), 'travel'] = False
+
+df_agg.to_csv(path+'trainingpeaks_day.csv', index_label=False)
