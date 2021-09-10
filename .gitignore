@@ -32,10 +32,10 @@ config.py
 /data/Dexcom/export_eva/*
 /data/Dexcom/timezone/*.csv
 
-/data/LibreView/clean/*
-/data/LibreView/raw_anonymous/*
-/data/LibreView/raw/*
-/data/LibreView/_bin/*
+/data/_archive/LibreView/clean/*
+/data/_archive/LibreView/raw_anonymous/*
+/data/_archive/LibreView/raw/*
+/data/_archive/LibreView/_bin/*
 
 /data/TrainingPeaks/2019/glucose/*
 /data/TrainingPeaks/2019/timezone/*
@@ -49,24 +49,24 @@ config.py
 /data/TrainingPeaks/2019/raw/*
 /data/TrainingPeaks/2019/_bin/*
 
-/data/TrainingPeaks/2020/clean2/*
-/data/TrainingPeaks/2020/clean/*
-/data/TrainingPeaks/2020/combine/*
-/data/TrainingPeaks/2020/csv/*
-/data/TrainingPeaks/2020/fit/*
-/data/TrainingPeaks/2020/raw_anonymous/*
-/data/TrainingPeaks/2020/raw/*
-/data/TrainingPeaks/2020/_bin/*
+/data/_archive/TrainingPeaks/2020/clean2/*
+/data/_archive/TrainingPeaks/2020/clean/*
+/data/_archive/TrainingPeaks/2020/combine/*
+/data/_archive/TrainingPeaks/2020/csv/*
+/data/_archive/TrainingPeaks/2020/fit/*
+/data/_archive/TrainingPeaks/2020/raw_anonymous/*
+/data/_archive/TrainingPeaks/2020/raw/*
+/data/_archiveTrainingPeaks/2020/_bin/*
 
 /data/TrainingPeaks+Dexcom/*.csv
 /data/TrainingPeaks+Dexcom/_bin/*
 /data/TrainingPeaks+Dexcom/_backup/*
 /data/TrainingPeaks+Dexcom/timezone/*
 
-/data/TrainingPeaks+LibreView/resample_1min/*
-/data/TrainingPeaks+LibreView/1sec/*
-/data/TrainingPeaks+LibreView/raw/*
-/data/TrainingPeaks+LibreView/_bin/*
+/data/_archive/TrainingPeaks+LibreView/resample_1min/*
+/data/_archive/TrainingPeaks+LibreView/1sec/*
+/data/_archive/TrainingPeaks+LibreView/raw/*
+/data/_archive/TrainingPeaks+LibreView/_bin/*
 
 /data/CampCalifornia/*
 
