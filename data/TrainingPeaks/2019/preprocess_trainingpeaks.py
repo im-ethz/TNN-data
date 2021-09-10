@@ -565,6 +565,29 @@ for i in athletes:
 	del df
 
 
+# TODO: remove extreme values
+
+
+athletes = sorted([int(i.rstrip('.csv')) for i in os.listdir(path+'clean3/')])
+
+for i in athletes:
+	print("\n------------------------------- Athlete ", i)
+
+	df_info = pd.read_csv(path+'clean/'+str(i)+'/'+str(i)+'_info.csv', index_col=0, header=[0,1])
+	df_info = df_info[['hr_zone', 'power_zone', 'session']]
+
+	# remove unknown columns
+	df_info = df_info[df_info.columns[~df_info.columns.get_level_values(1).str.startswith('unknown')]]
+
+	df_info.columns = df_info.columns.get_level_values(1)
+
+	df_info = df_info[['start_time', 'timestamp', 'total_timer_time', 'hr_zone [bpm]', 'power_zone [watts]', 'time_in_hr_zone', 'time_in_power_zone',
+			'intensity_factor', 'normalized_power', 'threshold_power', 'training_stress_score', 'total_calories']]
+
+	df_info.rename(columns={'timestamp':'timestamp_stop', 'start_time':'timestamp_start'}, inplace=True)
+
+	df_info.to_csv(path+'clean3/'+str(i)+'/'+str(i)+'_info.csv', index_label=False)
+
 # TODO: remove training sessions for which one column is missing
 
 # -------------------- Zeros power meter
