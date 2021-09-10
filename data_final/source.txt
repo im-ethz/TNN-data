@@ -3,6 +3,8 @@ data/info/overview.xls												data/athletes.xls
 
 data/fitness/fitness_analysis_2019_anonymous.csv					data/fitness.csv
 
+data/calendar/racecalendar_2019_anonymous_list.csv					data/calendar.csv
+
 data/Dexcom/dexcom_clean.csv										data/dexcom.csv
 data/Dexcom/timezone/timezone_dexcom.csv							data/dexcom_timezone_local2utc.csv
 
