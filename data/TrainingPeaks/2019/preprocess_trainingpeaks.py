@@ -25,7 +25,6 @@ tzwhere = tzwhere.tzwhere()
 from config import rider_mapping
 rider_mapping_inv = {v:k for k, v in rider_mapping.items()}
 
-from plot import *
 from helper import *
 
 import gc
@@ -507,7 +506,7 @@ for i in athletes:
 
 	# length training
 	length_training = df.groupby('file_id').count().max(axis=1) / 60
-	PlotPreprocess(path+'clean3/'+str(i)+'/', athlete=i).plot_hist(length_training, 'length_training (min)')
+	#PlotPreprocess(path+'clean3/'+str(i)+'/', athlete=i).plot_hist(length_training, 'length_training (min)')
 
 	print("Max training length (min): ", length_training.max())
 	print("Number of training sessions that last shorter than 10 min: ", (length_training <= 10).sum())
@@ -516,7 +515,8 @@ for i in athletes:
 
 	# -------------------- Left-Right Balance
 	# there are some strings in this column for some reason (e.g. 'mask', 'right')
-	df.left_right_balance = pd.to_numeric(df.left_right_balance, errors='coerce')
+	df.left_right_balance.replace({'mask':np.nan, 'right':np.nan}, inplace=True)
+	df.left_right_balance = pd.to_numeric(df.left_right_balance)
 	print("CLEAN: left-right balance")
 
 	# -------------------- Enhanced altitude
@@ -538,12 +538,14 @@ for i in athletes:
 	df.rename({'enhanced_speed':'speed'}, axis=1, inplace=True)
 
 	# -------------------- Elevation gain
-	df['elevation_gain'] = df.groupby('file_id')['altitude'].transform(lambda x: x.diff())
+	df['elevation_gain'] = df.groupby('file_id')['altitude'].transform(lambda x: x.interpolate(method='linear').diff())
+	df.loc[df['timestamp'].diff() > '1s', 'elevation_gain'] = np.nan
 	print("CREATED: elevation gain")
 	# TODO: remove extreme values
 
 	# -------------------- Acceleration
-	df['acceleration'] = df.groupby('file_id')['speed'].transform(lambda x: x.diff())
+	df['acceleration'] = df.groupby('file_id')['speed'].transform(lambda x: x.interpolate(method='linear').diff())
+	df.loc[df['timestamp'].diff() > '1s', 'acceleration'] = np.nan
 	print("CREATED: acceleration")
 	# TODO: remove extreme values
 
