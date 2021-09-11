@@ -36,6 +36,8 @@ power_zones = FTP.apply(calc_power_zones, axis=1)
 cal_race = pd.read_csv(path+'calendar.csv', index_col=0)
 cal_race = cal_race[cal_race.type == 'R'] # filter races
 cal_race.drop('type', axis=1, inplace=True)
+cal_race['start_date'] = pd.to_datetime(cal_race['start_date'])
+cal_race['end_date'] = pd.to_datetime(cal_race['end_date'])
 
 # travel calendar
 cal_travel = pd.read_csv(path+'travel.csv', index_col=[0,1])
@@ -66,8 +68,12 @@ for i in athletes:
 
 	# combine pedal smoothness
 	# TODO: check if correct
-	df['combined_pedal_smoothness'].fillna(df['left_pedal_smoothness']*(df['left_right_balance'].clip(0,100)/100)
-		+ df['right_pedal_smoothness']*(1-df['left_right_balance'].clip(0,100)/100), inplace=True)
+	try:
+		df['combined_pedal_smoothness'].fillna(df['left_pedal_smoothness']*(df['left_right_balance'].clip(0,100)/100)
+			+ df['right_pedal_smoothness']*(1-df['left_right_balance'].clip(0,100)/100), inplace=True)
+	except KeyError:
+		df['combined_pedal_smoothness'] = df['left_pedal_smoothness']*(df['left_right_balance'].clip(0,100)/100)\
+			+ df['right_pedal_smoothness']*(1-df['left_right_balance'].clip(0,100)/100)
 
 	# split out columns in ascent and descent
 	df['descent'] = df.groupby('file_id')['altitude'].transform(lambda x: x.interpolate(method='linear').diff() < 0)
@@ -112,6 +118,7 @@ for i in athletes:
 	del df, df_times, df_zones, df_power, df_calos, df_stats, df_files, df_info
 
 df_agg = pd.concat(df_agg)
+df_agg = df_agg.reset_index().rename(columns={'level_0':'RIDER'})
 
 # merge with race info
 df_agg['race'] = False
