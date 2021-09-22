@@ -131,3 +131,50 @@ for _, (i, d_start, d_end) in cal_travel.iterrows():
 	df_agg.loc[(df_agg.RIDER == i) & (df_agg.date > d_start) & (df_agg.date < d_end), 'travel'] = False
 
 df_agg.to_csv(path+'trainingpeaks_day.csv', index_label=False)
+
+# ----------------------- modalities
+# TODO: split up and down?
+df_agg = df_agg.set_index(['RIDER', 'date'])
+
+modalities = {}
+
+# TIME
+modalities.update({k:'TIME' for k in ['timestamp_min', 'timestamp_max', 'timestamp_count', 'local_timestamp_min', 'local_timestamp_max']})
+
+# CALENDAR
+modalities.update({k:'CALENDAR' for k in ['race', 'travel']})
+
+# HR
+modalities.update({k:'HR' for k in df_agg.columns[df_agg.columns.str.startswith('time_in_hr')]})
+modalities.update({k:'HR' for k in df_agg.columns[df_agg.columns.str.startswith('heart_rate')]})
+modalities['efficiency_factor'] = 'HR'
+
+# POWER
+modalities.update({k:'POWER' for k in df_agg.columns[df_agg.columns.str.startswith('time_in_power')]})
+modalities.update({k:'POWER' for k in df_agg.columns[df_agg.columns.str.startswith('power')]})
+modalities.update({k:'POWER' for k in df_agg.columns[df_agg.columns.str.startswith('left_')]})
+modalities.update({k:'POWER' for k in df_agg.columns[df_agg.columns.str.startswith('right_')]})
+modalities.update({k:'POWER' for k in df_agg.columns[df_agg.columns.str.startswith('combined_')]})
+modalities.update({k:'POWER' for k in df_agg.columns[df_agg.columns.str.startswith('cadence')]})
+modalities['normalised_power'] = 'POWER'
+modalities['intensity_factor'] = 'POWER'
+modalities['training_stress_score'] = 'POWER'
+modalities['variability_index'] = 'POWER'
+modalities['chronic_training_load'] = 'POWER'
+modalities['acute_training_load'] = 'POWER'
+modalities['training_stress_balance'] = 'POWER'
+modalities['total_calories'] = 'POWER'
+
+# GPS
+modalities.update({k:'GPS' for k in df_agg.columns[df_agg.columns.str.startswith('grade')]})
+modalities.update({k:'GPS' for k in df_agg.columns[df_agg.columns.str.startswith('altitude')]})
+modalities.update({k:'GPS' for k in df_agg.columns[df_agg.columns.str.startswith('distance')]})
+modalities.update({k:'GPS' for k in df_agg.columns[df_agg.columns.str.startswith('speed')]})
+modalities.update({k:'GPS' for k in df_agg.columns[df_agg.columns.str.startswith('acceleration')]})
+modalities.update({k:'GPS' for k in df_agg.columns[df_agg.columns.str.startswith('temperature')]})
+modalities.update({k:'GPS' for k in df_agg.columns[df_agg.columns.str.startswith('elevation_gain')]})
+
+# sort columns
+df_agg = df_agg[modalities.keys()]
+df_agg.columns = pd.MultiIndex.from_tuples([(v,k) for k, v in modalities.items()])
+df_agg.to_csv(path+'trainingpeaks_day_modalities.csv')
