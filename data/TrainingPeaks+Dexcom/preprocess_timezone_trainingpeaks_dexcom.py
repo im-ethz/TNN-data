@@ -53,7 +53,6 @@ sys.path.append(os.path.abspath('../../'))
 import numpy as np
 import pandas as pd
 
-from plot import *
 from helper import *
 from calc import *
 from config import rider_mapping

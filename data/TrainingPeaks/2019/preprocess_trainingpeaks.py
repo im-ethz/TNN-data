@@ -1,6 +1,3 @@
-# TODO: include units in column names (not possible for now, maybe saved units wrong..)
-# TODO: remove duplicate timestamps
-# TODO: instead of deleting data for which both local timestamps are not incorrect, try finding out which one is the right one (if you overlap it with Libre)
 # TODO: THE SORTING PROBABLY DOESN"T WORK
 import os
 import sys
@@ -566,7 +563,6 @@ for i in athletes:
 
 	del df
 
-
 # TODO: remove extreme values
 
 
@@ -591,116 +587,3 @@ for i in athletes:
 	df_info.to_csv(path+'clean3/'+str(i)+'/'+str(i)+'_info.csv', index_label=False)
 
 # TODO: remove training sessions for which one column is missing
-
-# -------------------- Zeros power meter
-# TODO: figure out what to do with zeros from power meter
-# CHECK: is the previous value for a nan always a zero: answer NO
-# CHECK: is the a zero always followed by a nan: answer more NO
-# Note: sometimes the power is nan if there is a shift in timestamps
-# Note: zero power often happens for negative grades, so maybe it is actually when they stop pedalling
-# TODO: ask how this works in real life
-# TODO: nan seems to happen a lot also on a specific day, remove that file
-
-# TODO: filter out training sessions for which a whole column is missing
-# TODO: remove training sessions for which there is no distance at all
-
-# TODO: find out what happened when there are large gaps in the data
-# TODO: calculate values (statistics) on a training-level
-# TODO: elevation_gain, acceleartion and accumulated power now contain extreme values when a large shift in time is made within a training
-# imputation
-"""
-for i in athletes:
-	print("\n------------------------------- Athlete ", i)
-
-	df = pd.read_csv(path+'clean2/'+str(i)+'/'+str(i)+'_data.csv', index_col=0)
-
-	df['timestamp'] = pd.to_datetime(df['timestamp'])
-	df['local_timestamp'] = pd.to_datetime(df['local_timestamp'])
-
-	# -------------------- Position
-	# check if position long and lat are missing at the same time or not 
-	print("Number of missing values position_lat: ", df['position_lat'].isna().sum())
-	print("Number of missing values position_long: ", df['position_long'].isna().sum())
-	print("Number of times both position_lat and position_long missing: ", 
-		(df['position_lat'].isna() & df['position_long'].isna()).sum())
-	# not really relevant because we're not going to do anything with it anymore
-
-	
-	print("\n-------- Remove first rows mostly nan")
-	# TODO: move this to the next stage
-	# for each file, go over the first rows and check the percentage of nans
-	df['percentage_nan'] = df[set(df.columns) - cols_ignore].isna().sum(axis=1) / len(set(df.columns) - cols_ignore)
-	count_drop_firstrows = 0
-	for f in df.file_id.unique():
-		for j, row in df[df.file_id == f].iterrows():
-			if row['percentage_nan'] > .75:
-				df.drop(j, inplace=True)
-				count_drop_firstrows += 1
-			else:
-				break
-	print("DROPPED: {:g} first rows with more than 75\% nans".format(count_drop_firstrows))
-	
-
-	# -------------------- Impute nans
-	# TODO fill up nans with duplicates
-	# df_dupl = pd.read_csv(path+'clean/'+str(i)+'/'+str(i)+'_data_dupl.csv', index_col=0)
-
-
-	# -------------------- Temperature - TODO maybe move this to before
-	# smooth temperature (because of binned values) (with centering implemented manually)
-	# rolling mean of {temp_window} seconds, centered
-	temp_window = 200 #in seconds
-	df_temperature_smooth = df.set_index('local_timestamp')['temperature']\
-		.rolling('%ss'%temp_window, min_periods=1).mean()\
-		.shift(-temp_window/2, freq='s').rename('temperature_smooth')
-	df = pd.merge(df, df_temperature_smooth, left_on='local_timestamp', right_index=True, how='left')
-	del df_temperature_smooth ; gc.collect()
-	print("CREATED: temperature smooth")
-
-	print("Fraction of rows for which difference between original temperature and smoothed temperature is larger than 0.5: ",
-		((df['temperature_smooth'] - df['temperature']).abs() > .5).sum() / df.shape[0])
-
-	PlotPreprocess('../Descriptives/', athlete=i).plot_smoothing(df, 'temperature', kwargs=dict(alpha=.5, linewidth=2))
-
-	# note that 200s should probably be more if you look at the distributions
-	sns.histplot(df, x='temperature', kde=True)
-	sns.histplot(df, x='temperature_smooth', kde=True, color='red')
-	plt.show()
-	plt.close()
-
-	# -------------------- Battery level
-	# find out if/when battery level is not monotonically decreasing
-	# TODO: why does this happen?
-	battery_monotonic = pd.Series()
-	for idx in df.file_id.unique():
-		battery_monotonic.loc[idx] = (df.loc[df.file_id == idx, 'battery_soc'].dropna().diff().fillna(0) <= 0).all()
-
-	if (~battery_monotonic).sum() > 0:
-		print("WARNING: Number of trainings for which battery level is not monotonically decreasing: ",
-			(~battery_monotonic).sum())
-		battery_notmonotonic_index = df.file_id.unique()[~battery_monotonic]
-	
-		# plot battery levels
-		cmap = matplotlib.cm.get_cmap('viridis', len(battery_notmonotonic_index))
-		ax = plt.subplot()
-		for c, idx in enumerate(battery_notmonotonic_index): #for date in df.date.unique():
-			df[df.file_id == idx].plot(ax=ax, x='time_training', y='battery_soc',
-				color=cmap(c), legend=False, alpha=.5, kind='scatter', s=10.)
-		plt.ylabel('battery_soc')
-		plt.show()
-		plt.close()
-
-	# linearly interpolate battery level (with only backwards direction)
-	for idx in df.file_id.unique():
-		df.loc[df.file_id == idx, 'battery_soc_ilin'] = \
-		df.loc[df.file_id == idx, 'battery_soc']\
-		.interpolate(method='time', limit_direction='forward')
-	print("CREATED: linearly interpolated battery level")
-
-	PlotPreprocess('../Descriptives/', athlete=i).plot_interp(df, 'battery_soc', kwargs=dict(alpha=.5), 
-		ikwargs=dict(alpha=.5, kind='scatter', s=10.))
-
-	# TODO: clean more features here, and add some as well
-
-	df.to_csv(path+'clean3/'+str(i)+'/'+str(i)+'_data.csv', index_label=False)
-"""

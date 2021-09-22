@@ -14,7 +14,6 @@ import matplotlib
 matplotlib.use('Agg')
 from pandas_profiling import ProfileReport
 
-from plot import *
 from helper import *
 from calc import *
 from config import rider_mapping
@@ -406,62 +405,3 @@ for (i,n), (tz, _, _, ts_min, ts_max, _, _) in df_changes.iterrows():
 # TODO: fix all insulin and carbs metrics
 
 df.to_csv(path+'dexcom_clean.csv')
-
-"""
-# --------------------------------- Select parts before, during and after training sessions
-df = pd.read_csv(path+'dexcom_clean.csv', index_col=0)
-
-df['timestamp'] = pd.to_datetime(df['timestamp'])
-df['local_timestamp'] = pd.to_datetime(df['local_timestamp'])
-
-df = df[df['Event Type'] == 'EGV']
-
-df_tp = pd.read_csv(path_tz+'timezone_list_final.csv', index_col=0)
-df_tp = df_tp[['RIDER', 'timestamp_min', 'timestamp_max', 'timezone']]
-
-df_tp['timezone'] = pd.to_timedelta(df_tp['timezone'])
-df_tp['timestamp_min'] = pd.to_datetime(df_tp['timestamp_min'])
-df_tp['timestamp_max'] = pd.to_datetime(df_tp['timestamp_max'])
-
-"""
-"""
-# quick check if training sessions should be merged
-# if the time between consecutive training sessions is shorter than 1 hour, they should be merged
-df_tp['merge'] = False
-df_tp.loc[(df_tp.timestamp_min.shift(-1) - df_tp.timestamp_max < '1h') & (df_tp.RIDER.diff().shift(-1) == 0), 'merge'] = True
-
-for idx in df_tp[df_tp['merge']].index:
-	df_tp.loc[idx-1, 'timestamp_max'] = df_tp.loc[idx, 'timestamp_max']
-df_tp = df_tp[~df_tp['merge']]
-
-df_tp.drop('merge', axis=1, inplace=True)
-df_tp = df_tp.reset_index(drop=True)
-"""
-"""
-df['train'] = False
-df['after'] = False
-for idx, (i, ts_min, ts_max, _) in df_tp.iterrows():
-	# identify during training
-	df.loc[(df.RIDER == i) & (df.timestamp >= ts_min) & (df.timestamp <= ts_max), 'train'] = True
-	df.loc[(df.RIDER == i) & (df.timestamp >= ts_min) & (df.timestamp <= ts_max), 'tid'] = idx
-
-	# identify after training
-	df.loc[(df.RIDER == i) & (df.timestamp >= ts_max) & (df.timestamp <= ts_max + pd.to_timedelta('6h')), 'after'] = True
-
-# identify awake time
-df['wake'] = df.local_timestamp.dt.time >= datetime.time(6)
-# identify sleep time
-df['sleep'] = df.local_timestamp.dt.time < datetime.time(6)
-
-df.to_csv(path+'dexcom_clean_sections.csv')
-
-
-# --------------------------------- Checks
-# check for how many readings we do not know the timezone
-print("Number of readings with timezone unknown: ", df.timestamp.isna().sum())
-
-# create pandas profiling report
-matplotlib.use('Agg')
-profile = ProfileReport(df, title='pandas profiling report', minimal=True)
-profile.to_file(path+'report_clean.html')
-"""
