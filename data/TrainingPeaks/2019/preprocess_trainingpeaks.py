@@ -510,6 +510,24 @@ for i in athletes:
 	print("Number of training sessions that last shorter than 20 min: ", (length_training <= 20).sum())
 	del length_training
 
+	# -------------------- Distance
+	# when position_lat and position_long are missing, set value of distance to nan
+	df.loc[df['position_lat'].isna(), 'distance'] = np.nan
+
+	# clean distance > 1000km (note this works for now, but in the future we should reset it and add it up again)
+	df.loc[df['distance'] > 1e6, 'distance'] = np.nan	
+
+	""" TODO
+	# calculate speed from distance
+	# interpolate for nans - then average over timestamps (in case timestamps are missing) - then take rolling mean over 5 sec
+	for fid in df.file_id.unique():
+		df.loc[df.file_id == fid, 'speed2'] = (df.loc[df.file_id == fid, 'distance'].interpolate(method='linear').diff() / df.loc[df.file_id == fid, 'local_timestamp'].diff().dt.seconds).rolling(5).mean()
+
+	# remove measurements with speed higher than 200 km/h
+	#df.loc[df['speed2'] > 200*1000/3600, 'distance'] = np.nan
+	df.drop('speed2', axis=1, inplace=True)
+	"""
+
 	# -------------------- Left-Right Balance
 	# there are some strings in this column for some reason (e.g. 'mask', 'right')
 	df.left_right_balance.replace({'mask':np.nan, 'right':np.nan}, inplace=True)
@@ -565,7 +583,6 @@ for i in athletes:
 
 # TODO: remove extreme values
 
-
 athletes = sorted([int(i.rstrip('.csv')) for i in os.listdir(path+'clean3/')])
 
 for i in athletes:
@@ -585,5 +602,3 @@ for i in athletes:
 	df_info.rename(columns={'timestamp':'timestamp_stop', 'start_time':'timestamp_start'}, inplace=True)
 
 	df_info.to_csv(path+'clean3/'+str(i)+'/'+str(i)+'_info.csv', index_label=False)
-
-# TODO: remove training sessions for which one column is missing
