@@ -24,18 +24,17 @@
 config.py
 
 /data/Dexcom/*.csv
-/data/Dexcom/TNN_CGM_2019_EU_exported_20210224.xlsx
-/data/Dexcom/_bin/*
-/data/Dexcom/_archive/*
-/data/Dexcom/_backup/*
+/data/Dexcom/*.xlsx
 /data/Dexcom/drop/*
-/data/Dexcom/export_eva/*
+/data/Dexcom/export/*
 /data/Dexcom/timezone/*.csv
 
 /data/_archive/LibreView/clean/*
 /data/_archive/LibreView/raw_anonymous/*
 /data/_archive/LibreView/raw/*
 /data/_archive/LibreView/_bin/*
+/data/_archive/Dexcom/_archive/*
+/data/_archive/Dexcom/_backup/*
 
 /data/TrainingPeaks/2019/glucose/*
 /data/TrainingPeaks/2019/timezone/*

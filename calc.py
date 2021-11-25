@@ -10,8 +10,8 @@ glucose_levels = {'hypo L2': (0,53),
 				  'hyper L1': (181,250),
 				  'hyper L2': (251,10000)}
 
-mmoll_mgdl = 18#.018
-mgdl_mmoll = 0.0555
+mmoll_mgdl = 18
+mgdl_mmoll = 1/mmoll_mgdl
 
 def calc_hr_zones(LTHR:float) -> list:
 	# Coggan power zones

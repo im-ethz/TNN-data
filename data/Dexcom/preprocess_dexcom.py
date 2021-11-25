@@ -4,112 +4,221 @@
 # TODO: also look for sensor errors
 import os
 import gc
-import sys
-sys.path.append(os.path.abspath('../../'))
 
 import numpy as np
 import pandas as pd
-
-import matplotlib
-matplotlib.use('Agg')
-from pandas_profiling import ProfileReport
 
 from helper import *
 from calc import *
 from config import rider_mapping
 
-path = './'
-path_tz = '../TrainingPeaks/2019/timezone/'
+from tqdm import tqdm
+
+path = './data/Dexcom/'
 
 if not os.path.exists(path+'drop/'):
-	os.mkdir(path+'drop/')
+    os.mkdir(path+'drop/')
 
-df = pd.read_csv('TNN_CGM_2019.csv', index_col=0)
+misspellings = {'declan':'irvine', 'clancey':'clancy'}
 
-df['local_timestamp'] = pd.to_datetime(df['local_timestamp'])
 
-# sort and save old index as backup
-df.sort_values(['RIDER', 'local_timestamp', 'Event Type', 'Event Subtype', 'Transmitter Time (Long Integer)'], inplace=True)
-df.reset_index(drop=True, inplace=True)
+# --------------------- merge exports
+def clean_export(df):
+    """
+    Clean individual export files: 
+    - extract and correct patient info
+    - drop alert info in first rows
+    """
+    # extract patient info of rider
+    df_patient = df[(df['Event Type'] == 'FirstName') | (df['Event Type'] == 'LastName') | (df['Event Type'] == 'DateOfBirth')]
 
-df.to_csv(path+'dexcom_raw.csv')
+    # extract name and correct for name mistakes in dexcom CLARITY
+    name = df_patient.loc[df['Event Type'] == 'LastName', 'Patient Info'].str.lower().replace(misspellings).values[0]
+
+    df = df.drop('Patient Info', axis=1)
+    df = df.drop(df_patient.index)
+
+    df['RIDER'] = name
+
+    # drop alert info
+    df = df[(df['Event Type'] != 'Device') & (df['Event Type'] != 'Alert')]
+
+    return df
+
+def merge_export(source):
+    """
+    Merge exports (90 days files) into one csv file
+    """
+    df = pd.concat([clean_export(pd.read_csv(path+'export/%s/%s'%(source,f))) for f in os.listdir(path+'export/%s/'%source)])
+
+    # remove old index
+    df = df.drop('Index', axis=1)
+    df = df.reset_index(drop=True)
+
+    # sort riders on order of rider mapping
+    df = df.reset_index().sort_values(by=['RIDER', 'index'], key=lambda x: x.map(rider_mapping)).drop('index', axis=1)
+    df = df.reset_index(drop=True)
+
+    df.to_csv(path+'TNN_CGM_2015-2021_%s_export_20211119.csv'%source)
+    return df
+
+df_eu = merge_export('EU')
+df_us = merge_export('US')
 
 # --------------------- clean glucose
-# remove text "high" and "low" from glucose values
-df['Glucose Value (mmol/L) EXTREME'] = df['Glucose Value (mmol/L)'].apply(lambda x: x if isinstance(x, str) else np.nan)
-df['Glucose Value (mg/dL) EXTREME'] = df['Glucose Value (mg/dL)'].apply(lambda x: x if isinstance(x, str) else np.nan)
+def clean_glucose(df):
+    """
+    - remove "high" and "low" from event type and glucose values, and replace with 40 and 400
+    - replace 0 with nan in glucose value column if the event type is not EGV or calibration
+    - convert all mmol/L to mg/dL
+    """
+    # remove text "high" and "low" from glucose values and save in "EXTREME"
+    unit = df.columns[df.columns.str.startswith('Glucose Value')].str.split()[0][-1]
 
-df['Glucose Value (mmol/L)'] = pd.to_numeric(df['Glucose Value (mmol/L)'], errors='coerce')
-df['Glucose Value (mg/dL)'] = pd.to_numeric(df['Glucose Value (mg/dL)'], errors='coerce')
+    print("CLEAN zeros in Glucose Value if not EGV or calibration")
+    df.loc[(df['Event Type'] != 'EGV') & (df['Event Type'] != 'Calibration'), f'Glucose Value {unit}'] = np.nan
+    print("CHECK Are there remaining zero glucose values: ", not df[df[f'Glucose Value {unit}'] == 0].empty)
 
-# fill up glucose values mg/dL with mmol/L
-df['Glucose Value (mg/dL)'] = df['Glucose Value (mg/dL)'].fillna(df['Glucose Value (mmol/L)'] * mmoll_mgdl)
-df['Glucose Value (mg/dL) EXTREME'] = df['Glucose Value (mg/dL) EXTREME'].fillna(df['Glucose Value (mmol/L) EXTREME']) 
-print("FILLNA Glucose Value mg/dL with mmol/L to mg/dL")
-print("FILLNA Glucose Value mg/dL EXTREME with mmol/L")
+    print("MOVE 'high' and 'low' in Glucose Value to EXTREME")
+    df[f'Glucose Value EXTREME'] = df[f'Glucose Value {unit}'].apply(lambda x: x if isinstance(x, str) else np.nan)
+    df[f'Glucose Value {unit}'] = pd.to_numeric(df[f'Glucose Value {unit}'], errors='coerce')
 
-df.drop(['Glucose Value (mmol/L)', 'Glucose Value (mmol/L) EXTREME'], axis=1, inplace=True)
+    print("MOVE 'high' and 'low' in Event Subtype to EXTREME")
+    mask = (df['Event Type'] == 'EGV') & df['Event Subtype'].notna()
+    df.loc[mask, 'Glucose Value EXTREME'] = df.loc[mask, 'Glucose Value EXTREME'].fillna(df.loc[mask, 'Event Subtype']) 
+    df.loc[mask, 'Event Subtype'] = np.nan
 
-# NOTE: there will be a lot of duplicates in the file now, as US saved the data in mg/dL and EU saved it sometimes in mmol/L
-# In the merge, these were considered separate rows, even though they should be merged.
+    if unit == '(mmol/L)':
+        print("CONVERT mmol/L to mg/dL")
+        df['Glucose Value (mg/dL)'] = df['Glucose Value (mmol/L)'] * mmoll_mgdl
+        df = df.drop(f'Glucose Value {unit}', axis=1)
 
-# clean zeros glucose (sometimes a zero is put in instead of nan, when there is no glucose measurement)
-df.loc[(df['Event Type'] != 'EGV') & (df['Event Type'] != 'Calibration'), 'Glucose Value (mg/dL)'] = np.nan
-print("CHECK Are there remaining zero glucose values: ", not df[df['Glucose Value (mg/dL)'] == 0].empty)
+    print("REPLACE Low with 40 and High with 400 in EXTREME")
+    print("FILLNA Glucose Value with EXTREME")
+    df['Glucose Value (mg/dL)'] = df['Glucose Value (mg/dL)'].fillna(df['Glucose Value EXTREME'].replace({'Low':40., 'High':400.})).astype(float)
+    df = df.drop('Glucose Value EXTREME', axis=1)
+    
+    return df
 
-# Note: sometimes event subtype is "Low" or "High"
-# It seems that in this is when it is too low or too high to measure
-mask_subtype = (df['Event Type'] == 'EGV') & df['Event Subtype'].notna()
-print("CHECK Event Subtypes for Event Type == EGV: ", 
-	df[mask_subtype]['Event Subtype'].unique())
-print("CHECK Number of subtype entries for Event Type == EGV: ", 
-	mask_subtype.sum())
-print("CHECK Number of subtype entries for Event Type == EGV where Glucose Value (mg/dL) EXTRME is nan: ",
-	(mask_subtype & df['Glucose Value (mg/dL) EXTREME'].isna()).sum())
-print("CHECK Event subtype anywhere unequal to EXTREME: ", 
-	not df[mask_subtype & df['Glucose Value (mg/dL) EXTREME'].notna() 
-	& (df['Event Subtype'] != df['Glucose Value (mg/dL) EXTREME'])].empty)
-df.loc[mask_subtype, 'Glucose Value (mg/dL) EXTREME'] = df.loc[mask_subtype, 'Glucose Value (mg/dL) EXTREME']\
-															.fillna(df.loc[mask_subtype, 'Event Subtype']) 
-df.loc[mask_subtype, 'Event Subtype'] = np.nan
-print("FILLNA Glucose Value mg/dL EXTREME with Event Subtype")
+def first_clean(source):
+    """
+    Read in the merged exports and perform a first clean:
+    - anonymize data
+    - add source column
+    - rename timestamp
+    - remove empty columns
+    - remove "high" and "low" from event type and glucose values, and replace with 40 and 400
+    - replace 0 with nan in glucose value column if the event type is not EGV or calibration
+    - convert all mmol/L to mg/dL
+    """
+    df = pd.read_csv(path+'TNN_CGM_2015-2021_%s_export_20211119.csv'%source, index_col=0)
 
-# replace low and high with 40 and 400
-df['Glucose Value (mg/dL)'].fillna(df['Glucose Value (mg/dL) EXTREME'].replace({'Low':40., 'High':400.}), inplace=True)
-df.drop('Glucose Value (mg/dL) EXTREME', axis=1, inplace=True)
-df['Glucose Value (mg/dL)'] = df['Glucose Value (mg/dL)'].astype(float)
-print("REPLACE Low with 40 and High with 400")
-print("FILLNA Glucose Value mg/dL with EXTREME 40 (Low) and 400 (High)")
+    # anonymize file
+    df.RIDER = df.RIDER.apply(lambda x: rider_mapping[x.lower()])
 
-# --------------------- manual timezone mistakes riders
-# correct for mistakes by riders in manually switching timezones of their recorder
-# 15: mistake here is that he had to reset it after travelling
-# and then he switched the month and day around (e.g. 10/7 instead of 7/10)
-df.loc[(df.RIDER == 15)\
-	& (df['Source Device ID'] == 'PL82501061')\
-	& (df['Transmitter ID'] == '80YBT4')\
-	& (df['Transmitter Time (Long Integer)'] >= 4163883)\
-	& (df['Transmitter Time (Long Integer)'] <= 6179527), 'local_timestamp'] += pd.to_timedelta('90days')
-print("FIX timestamps of 15 from 7/10 to 10/7")
+    # source
+    df['source'] = 'Dexcom CLARITY '+source
 
-# 4: changed it to the wrong month
-# this is calculated by subtracting the transmitter timediff
+    # timestamp
+    df = df.rename({'Timestamp (YYYY-MM-DDThh:mm:ss)':'local_timestamp'}, axis=1)
+    df.local_timestamp = pd.to_datetime(df.local_timestamp)
+
+    # remove empty columns
+    df = df.dropna(axis=1, how='all')
+
+    # clean out glucose columns
+    df = clean_glucose(df)
+
+    return df
+
+df_eu = first_clean('EU')
+df_us = first_clean('US')
+
+# merge EU and US
+df = pd.merge(df_eu, df_us, how='outer',
+    on=df_us.columns.drop(['source', 'Glucose Value (mg/dL)']).tolist())
+
+# if item appears in both US and EU, keep the ones that appear in the US dataframe
+df['Glucose Value (mg/dL)'] = df['Glucose Value (mg/dL)_y'].fillna(df['Glucose Value (mg/dL)_x'])
+df['source'] = df['source_y'].fillna(df['source_x'])
+df = df.drop(['Glucose Value (mg/dL)_x', 'Glucose Value (mg/dL)_y', 'source_x', 'source_y'], axis=1)
+
+# sort and save
+df = df.sort_values(['RIDER', 'local_timestamp', 'Event Type', 'Event Subtype', 'Transmitter Time (Long Integer)'])
+df = df.reset_index(drop=True)
+df.to_csv(path+'dexcom_raw.csv')
+
+# --------------------- manual device timezone mistakes
+"""
+# CHECK
+from matplotlib import pyplot as plt
+import seaborn as sns
+
+for i in df['RIDER'].unique():
+    df_i = df[df.RIDER == i]
+    sns.lineplot(data=df_i, x='local_timestamp', y='Transmitter Time (Long Integer)', hue='Transmitter ID')
+    plt.show()
+
+for _, (i, tid) in df[['RIDER', 'Transmitter ID']].drop_duplicates().iterrows():
+    print(i, tid)
+    df_t = df[(df.RIDER == i) & (df['Transmitter ID'] == tid)]
+    plt.plot(df_t['local_timestamp'], df_t['Transmitter Time (Long Integer)'])
+    plt.show()
+    plt.close()
+"""
+
+# first step is to assign transmitter id where it is missing
+df.loc[df['Transmitter ID'].isna() & (df['Event Type'] == 'EGV'), 'Transmitter ID'] = 'UNK_ID'
+
+# second step is to correct for mistakes by riders in manually switching timezones of their receiver
+# changed it to the wrong month
 df.loc[(df.RIDER == 4)\
-	& (df['Source Device ID'] == 'PL82609380')\
-	& (df['Transmitter ID'] == '810APT')\
-	& (df['Transmitter Time (Long Integer)'] >= 6233271)\
-	& (df['Transmitter Time (Long Integer)'] <= 6879458), 'local_timestamp'] += pd.to_timedelta('30days 23:55:05') 
-print("FIX timestamps of 4 october -> november")
+    & (df['Source Device ID'] == 'PL82609380')\
+    & (df['Transmitter ID'] == '810APT')\
+    & (df['Transmitter Time (Long Integer)'] >= 6233271)\
+    & (df['Transmitter Time (Long Integer)'] <= 6879458), 'local_timestamp'] += pd.to_timedelta('30days 23:55:04') 
+print("FIX (4) 810APT timestamps october -> november")
 
-df.sort_values(['RIDER', 'local_timestamp', 'Event Type', 'Event Subtype', 'Transmitter Time (Long Integer)'], inplace=True)
+# had his device setup with the wrong year
+df.loc[(df.RIDER == 10)\
+    & (df['Source Device ID'] == 'PL82501087')\
+    & (df['local_timestamp'] <= '2018-01-22 17:40:57'), 'local_timestamp'] += pd.to_timedelta('365days') 
+print("FIX (10) PL82501087 timestamps 2018->2019")
 
-# TODO: check if it also holds for the calibration measurements in the same time window
+# reset the timestamp after travelling and switched the month and day around (10/4 instead of 4/10)
+df.loc[(df.RIDER == 15)\
+    & (df['Source Device ID'] == 'PL82501061')\
+    & (df['Transmitter ID'] == '809T66')\
+    & (df['Transmitter Time (Long Integer)'] >= 5674414)\
+    & (df['Transmitter Time (Long Integer)'] <= 6491302), 'local_timestamp'] += pd.to_timedelta('177days')
+print("FIX (15) PL82501061 timestamps from 10/4 to 4/10")
 
-# 12: strong suspicions that he has his device setup with the wrong month in there
-# because for both 2018 and 2019 the japan cup the timezone change took place exactly one month later
+# reset the timestamp after travelling and switched the month and day around (10/7 instead of 7/10)
+df.loc[(df.RIDER == 15)\
+    & (df['Source Device ID'] == 'PL82501061')\
+    & (df['Transmitter ID'] == '80YBT4')\
+    & (df['Transmitter Time (Long Integer)'] >= 4163883)\
+    & (df['Transmitter Time (Long Integer)'] <= 6179527), 'local_timestamp'] += pd.to_timedelta('90days')
+print("FIX (15) PL82501061 timestamps from 7/10 to 10/7")
 
+# had his device setup with the wrong year 3 times
+# easiest fix (that also includes calibration errors) is to shift everything below 2016-06-13 06:55:20 to one year up
+df.loc[(df.RIDER == 18)\
+    & (df['Source Device ID'] == 'SM64411240')\
+    & (df['local_timestamp'] <= '2016-06-13 06:55:20'), 'local_timestamp'] += pd.to_timedelta('365days') 
+print("FIX (18) SM64411240 timestamps 2016->2017")
 
-# --------------------- error transmitter ID
+# also the first dates were setup wrong
+df.loc[(df.RIDER == 18)\
+    & (df['Source Device ID'] == 'SM64411240')\
+    & (df['Transmitter ID'] == '40M63E')\
+    & (df['Transmitter Time (Long Integer)'] <= 1652609), 'local_timestamp'] += pd.to_timedelta('89days') 
+print("FIX (18) SM64411240 timestamps 89 days")
+
+df = df.sort_values(['RIDER', 'local_timestamp', 'Event Type', 'Event Subtype', 'Transmitter Time (Long Integer)'])
+df = df.reset_index(drop=True)
+
+# --------------------- error dexcom transmitter ID
 # OBSERVATION We see the following:
 # - There is a time window when both the first and second transmitter are observed, alternating a bit
 # - In the time that we observed both the first and second transmitter, 
@@ -122,172 +231,130 @@ df.sort_values(['RIDER', 'local_timestamp', 'Event Type', 'Event Subtype', 'Tran
 # SOLUTION The solution is to change the transmitter ID in the period that we observe both the old
 # and the new transmitter, to only the ID of the old transmitter. Then all issues should be fixed.
 
-# '2019-03-05 10:50:39' '2019-03-27 05:24:16' '80LF01' '80QJ2F'
-# see 6_transmitter_80QJ2F_time_reset.png
+df.loc[(df.RIDER == 4) & (df.local_timestamp >= '2019-07-13 05:11:07')\
+    & (df['Transmitter ID'] == '80CW29'), 'Transmitter ID'] = 'UNK_ID'
+print("FIX (4) transmitter ID between 2019-07-13 05:11:07 and 2019-08-22 05:24:16 from 80CW29 to UNK_ID")
+
 df.loc[(df.RIDER == 6) & (df.local_timestamp <= '2019-03-27 05:24:16')\
-	& (df['Transmitter ID'] == '80QJ2F') & (df['Event Type'] == 'EGV'), 'Transmitter ID'] = '80LF01'
+    & (df['Transmitter ID'] == '80QJ2F'), 'Transmitter ID'] = '80LF01'
 print("FIX (6) transmitter ID between 2019-03-05 10:50:39 and 2019-03-27 05:24:16 from 80QJ2F to 80LF01")
 
-# '2019-08-22 21:25:41' '2019-09-24 20:59:16' '80UKML' '80RE8H'
-# see 6_transmitter_80RE8H_time_reset.png
+df.loc[(df.RIDER == 6) & (df.local_timestamp <= '2018-11-25 15:29:29')\
+    & (df['Transmitter ID'] == '80LF01'), 'Transmitter ID'] = '80CPX2'
+print("FIX (6) transmitter ID between 2018-09-12 07:47:32 and 2018-11-25 15:29:29 from 80LF01 to 80CPX2")
+# TODO: he synched with two devices at the same time, so if there are duplicates from the transmitter time, remove them
+
 df.loc[(df.RIDER == 6) & (df.local_timestamp <= '2019-09-24 20:59:16')\
-	& (df['Transmitter ID'] == '80RE8H') & (df['Event Type'] == 'EGV'), 'Transmitter ID'] = '80UKML'
+    & (df['Transmitter ID'] == '80RE8H'), 'Transmitter ID'] = '80UKML'
 print("FIX (6) transmitter ID between 2019-08-22 21:25:41 and 2019-09-24 20:59:16 from 80RE8H to 80UKML")
 
-# '2019-01-17 15:56:19' '2019-01-18 22:36:15' '80JPC8' '80RRBL'
-# see 14_transmitter_80RRBL_time_reset.png
+df.loc[(df.RIDER == 10) & (df.local_timestamp <= '2017-03-17 20:22:40')\
+    & (df['Transmitter ID'] == '40M6JF'), 'Transmitter ID'] = '40M0TB'
+print("FIX (10) transmitter ID between 2017-03-10 02:13:23 and 2017-03-17 20:22:40 from 40M6JF to 40M0TB")
+
+df.loc[(df.RIDER == 14) & (df.local_timestamp <= '2020-02-06 13:24:30')\
+    & (df['Transmitter ID'] == '8JJ0MQ'), 'Transmitter ID'] = '810C8M'
+print("FIX (14) transmitter ID between 2020-01-27 16:40:03 and 2020-02-06 13:24:30 from 8JJ0MQ to 810C8M")
+
 df.loc[(df.RIDER == 14) & (df.local_timestamp <= '2019-01-18 22:36:15')\
-	& (df['Transmitter ID'] == '80RRBL') & (df['Event Type'] == 'EGV'), 'Transmitter ID'] = '80JPC8'
+    & (df['Transmitter ID'] == '80RRBL'), 'Transmitter ID'] = '80JPC8'
 print("FIX (14) transmitter ID between 2019-01-17 15:56:19 and 2019-01-18 22:36:15 from 80RRBL to 80JPC8")
 
-df.sort_values(['RIDER', 'local_timestamp', 'Event Type', 'Event Subtype', 'Transmitter Time (Long Integer)'], inplace=True)
-df.reset_index(drop=True, inplace=True)
+df.loc[(df.RIDER == 15) & (df.local_timestamp <= '2019-08-20 13:51:12')\
+    & (df['Transmitter ID'] == 'UNK_ID'), 'Transmitter ID'] = '80RNWS'
+print("FIX (15) transmitter ID between 2019-07-21 14:27:36 and 2019-08-20 13:51:12 from UNK_ID to 80RNWS")
 
+df.loc[(df.RIDER == 15) & (df.local_timestamp >= '2019-08-21 08:17:53')\
+    & (df['Transmitter ID'] == 'UNK_ID'), 'Transmitter ID'] = '80YBT4'
+print("FIX (15) transmitter ID between 2019-08-21 08:17:53 and 2019-09-15 16:46:21 from UNK_ID to 80YBT4")
 
-# OBSERVATION Nan transmitter ID after taking a break
-# It takes a bit for the device to register the transmitter ID
-# You can see this by the fact that the transmitter time continues counting correctly after the nan transmitter IDs
+df.loc[(df.RIDER == 17) & (df.local_timestamp <= '2018-09-14 09:12:34')\
+    & (df['Transmitter ID'] == '80UK8Y'), 'Transmitter ID'] = '80CU6B'
+print("FIX (17) transmitter ID between 2018-09-06 20:07:52 and 2018-09-14 09:12:34 from 80UK8Y to 80CU6B")
 
-df_nan_transmitter = df[df['Transmitter ID'].isna() & (df['Event Type'] == 'EGV')]
-idx_first_nan_transmitter = df_nan_transmitter[df_nan_transmitter.index.to_series().diff() != 1].index
-idx_last_nan_transmitter = df_nan_transmitter[df_nan_transmitter.index.to_series().diff().shift(-1) != 1].index
+df.loc[(df.RIDER == 18) & (df.local_timestamp <= '2019-06-22 08:32:45')\
+    & (df['Transmitter ID'] == '8GM9KD'), 'Transmitter ID'] = '80D24X'
+print("FIX (18) transmitter ID between 2019-06-22 08:02:45 and 2019-06-22 08:32:45 from 8GM9KD to 80D24X")
 
-# transmitter ID not saved yet with new transmitter
-# note that there are no calibration measurements in this slice
-# otherwise we would have to filter for it
-for i in range(len(idx_first_nan_transmitter)):	
-	df.loc[idx_first_nan_transmitter[i]:idx_last_nan_transmitter[i], 'Transmitter ID'] = df.loc[idx_last_nan_transmitter[i]+1, 'Transmitter ID']
-	print("FIX nan transmitter ID between index %s and %s"%(idx_first_nan_transmitter[i], idx_last_nan_transmitter[i]))
-
-# Note that for the last transmitter, there is the same observation of above (the jump in time)
-# note: no calibration measurement in slice (luckily)
-idx_last_break = df[df['Transmitter Time (Long Integer)'].diff() < 0].loc[idx_first_nan_transmitter[1]:idx_last_nan_transmitter[1]].index[0] - 1
-df.loc[idx_first_nan_transmitter[1]:idx_last_break, 'Transmitter ID'] = 'UNK_ID'
-print("FIX (15) transmitter ID between 2019-07-21 14:27:36 and 2019-08-20 13:51:12 from 80YBT4 to UNK_ID")
-
-df.sort_values(['RIDER', 'local_timestamp', 'Event Type', 'Event Subtype', 'Transmitter Time (Long Integer)'], inplace=True)
-df.reset_index(drop=True, inplace=True)
-
-"""
-# CHECK
-matplotlib.use('TkAgg')
-
-for i in df['RIDER'].unique():
-	df_i = df[df.RIDER == i]
-	sns.lineplot(data=df_i, x='local_timestamp', y='Transmitter Time (Long Integer)', hue='Transmitter ID')
-	plt.show()
-
-for _, (i, tid) in df[['RIDER', 'Transmitter ID']].drop_duplicates().iterrows():
-	print(i, tid)
-	df_t = df[(df.RIDER == i) & (df['Transmitter ID'] == tid)]
-	plt.plot(df_t['local_timestamp'], df_t['Transmitter Time (Long Integer)'])
-	plt.show()
-	plt.close()
-"""
-# 2 81J1XS (stayed constant for a bit)
-# 4 80CPYD (stayed constant for a bit, then went up much faster and then constant for a bit again)
-# 4 810APT (some back and forth for a day it seems (probably device change))
-# 4 8HLEH9 (stayed constant for a bit)
-# 6 80CPX2 (sth weird going on here)
-# 12 809SED (some back and forth for some days it seems (probably device change))
-# 15 80YBT4 (some back and forth for some days it seems (probably device change))
+df = df.sort_values(['RIDER', 'local_timestamp', 'Event Type', 'Event Subtype', 'Transmitter Time (Long Integer)', 'source'])
+df = df.reset_index(drop=True)
 
 # --------------------- date range
 # filter date range
-df = df[(df.local_timestamp.dt.date < datetime.date(2019,12,1)) & (df.local_timestamp.dt.date >= datetime.date(2018,12,1))]
-print("DROPPED entries after 30-11-2019 or before 01-12-2018")
+#df = df[(df.local_timestamp.dt.date < datetime.date(2019,12,1)) & (df.local_timestamp.dt.date >= datetime.date(2018,12,1))]
+#print("DROPPED entries after 30-11-2019 or before 01-12-2018")
 
-df.sort_values(['RIDER', 'local_timestamp', 'Event Type', 'Event Subtype', 'Transmitter Time (Long Integer)', 'source'], inplace=True)
-df.reset_index(drop=True, inplace=True)
+#df.sort_values(['RIDER', 'local_timestamp', 'Event Type', 'Event Subtype', 'Transmitter Time (Long Integer)', 'source'], inplace=True)
+#df.reset_index(drop=True, inplace=True)
 
 # --------------------- duplicates
+def drop(df, dname, mask):
+	df[mask].to_csv(path+'drop/'+dname+'.csv')
+	print("DROP %s "%mask.sum()+dname)
+	return df[~mask]
+
 # drop duplicates rows
-df_dupl = df[df.drop('source', axis=1).duplicated(keep=False)]
-df_dupl.to_csv(path+'drop/duplicated_rows.csv')
-print("DROP %s duplicated rows"%df.drop('source', axis=1).duplicated().sum())
-df = df[~df.drop('source', axis=1).duplicated(keep='first')] ; del df_dupl ; gc.collect()
-# TODO: delete dupl folder and all associated files
+df = drop(df, 'duplicated_rows',
+	df.drop('source', axis=1).duplicated(keep='first'))
 
 # drop duplicates rows where glucose value is not exactly the same, but the rest is
-# (this includes transmitter time, so we do not drop duplicates from travelling)
-df_dupl = df[df.drop(['source', 'Glucose Value (mg/dL)'], axis=1).duplicated(keep=False)]
-df = df[~df.drop(['source', 'Glucose Value (mg/dL)'], axis=1).duplicated(keep=False)]
+# this mostly occurs when data is both in eu and us, and in the merge, 
+# the glucose value from unit conversion (mmol/L to mg/dL) is not exactly the same
+# keep the ones that are from the US
+df = drop(df, 'duplicated_rows_noglucose',
+	df.drop(['source', 'Glucose Value (mg/dL)'], axis=1).duplicated(keep='last'))
 
-# rows with originally glucose values in different units, therefore not merged in other script
-print(df_dupl.notna().sum()) # print columns that we don't need to use
-df_gb = df_dupl.groupby(['RIDER', 'Event Type', 'local_timestamp', 'Transmitter Time (Long Integer)', 
-	'Transmitter ID', 'Source Device ID',]).agg({'Glucose Value (mg/dL)':'mean', 'source':'first'}).reset_index()
-df = df.append(df_gb, ignore_index=True)
+df = df.sort_values(['RIDER', 'Transmitter ID', 'Transmitter Time (Long Integer)', 'source', 'Source Device ID'])
+# recording with two devices at the same time and data downloaded from the same source (CLARITY EU/US)
+df = drop(df, 'duplicated_rows_fromtworeceivers',
+	(df['Event Type'] == 'EGV') & df.duplicated(['RIDER', 'Transmitter ID', 'Transmitter Time (Long Integer)', 'source'], keep='first'))
 
-# remaining readings without trainsmitter id or transmitter time (e.g. calibration readings)
-df_res = df_dupl[~df_dupl.local_timestamp.isin(df_gb.local_timestamp)]
-df_gb = df_res.groupby(['RIDER', 'Event Type', 'local_timestamp', 'Source Device ID',]).agg({'Glucose Value (mg/dL)':'mean', 'source':'first'}).reset_index()
-df = df.append(df_gb, ignore_index=True)
+# recording with two devices at the same time and data downloaded from a different source (CLARITY EU/US)
+df = drop(df, 'duplicated_rows_fromtworeceivers_differentsource',
+	(df['Event Type'] == 'EGV') & df.duplicated(['RIDER', 'Transmitter ID', 'Transmitter Time (Long Integer)'], keep='last'))
 
-df.sort_values(['RIDER', 'local_timestamp', 'Event Type', 'Event Subtype', 'Transmitter Time (Long Integer)'], inplace=True)
-df.reset_index(drop=True, inplace=True)
-
-# check if there are duplicated EGV readings with the same rider, transmitter_order, transmitter_time
-print("CHECK Number of duplicated EGV readings (rider, transmitter id, transmitter time): ", 
-	df[df['Event Type'] == 'EGV'].duplicated(['RIDER', 'Transmitter ID', 'Transmitter Time (Long Integer)'], keep=False).sum())
-df_dupl = df[(df['Event Type'] == 'EGV') & df.duplicated(['RIDER', 'Transmitter ID', 'Transmitter Time (Long Integer)'], keep=False)]
-df.drop(df_dupl.index, inplace=True)
-
-df_dupl.sort_values(['RIDER', 'Transmitter ID', 'Transmitter Time (Long Integer)', 'source'], inplace=True)
-df_gb = df_dupl.groupby(['RIDER', 'Transmitter ID', 'Transmitter Time (Long Integer)'])\
-	.agg({'local_timestamp':'first',
-		  'Event Type':'first', 
-		  'Source Device ID':'first',
-		  'Glucose Value (mg/dL)':'first', # note: we tested and the max difference between the two was 1mg/dl
-		  'source':'first'}).reset_index()
-# Note: we also just could have selected the iphone/EU data here
-df = df.append(df_gb, ignore_index=True)
-
-df.sort_values(['RIDER', 'local_timestamp', 'Event Type', 'Event Subtype', 'Transmitter Time (Long Integer)'], inplace=True)
-df.reset_index(drop=True, inplace=True)
-
-del df_dupl, df_gb, df_res
+df = df.sort_values(['RIDER', 'local_timestamp', 'Event Type', 'Event Subtype', 'Transmitter Time (Long Integer)'])
+df = df.reset_index(drop=True)
 
 # --------------------- nans
-# check for nan rows
-df_nan = df[(df[['Insulin Value (u)', 'Carb Value (grams)', 'Duration (hh:mm:ss)', 'Glucose Value (mg/dL)']].isna().all(axis=1)
-			& (df['Event Type'] != 'Insulin') & (df['Event Type'] != 'Health'))]
-df_nan.to_csv(path+'drop/nan_rows.csv')
-print("DROP %s nan rows (not event type insulin or health)"%len(df_nan))
-df.drop(df_nan.index, inplace=True) ; del df_nan ; gc.collect()
+df = drop(df, 'nan_rows', df[['Insulin Value (u)', 'Carb Value (grams)', 'Duration (hh:mm:ss)', 'Glucose Value (mg/dL)']].isna().all(axis=1)
+            & (df['Event Type'] != 'Insulin') & (df['Event Type'] != 'Health'))
 
 # --------------------- transmitter check
 # check if there are any readings that are not EGV or Calibration and that do have a transmitter ID
-print("Number of readings that are not EGV or Calibration and that do have a transmitter ID: ", 
-	((df['Event Type'] != 'EGV') & (df['Event Type'] != 'Calibration') & df['Transmitter ID'].notna()).sum())
+print("CHECK Number of readings that are not EGV or Calibration and that do have a transmitter ID: ", 
+    ((df['Event Type'] != 'EGV') & (df['Event Type'] != 'Calibration') & df['Transmitter ID'].notna()).sum())
 
 # find out order of the transmitters, and then sort them
 # such that the actual first transmitted signal will always be higher (regardless of local timestamps)
 # this can later be used to identify if there is any unidentified travelling still in the data
 df_transmitter = df[df['Event Type'] == 'EGV'].groupby(['RIDER', 'Transmitter ID'])\
-	.agg({'local_timestamp':['min', 'max']})\
-	.sort_values(['RIDER', ('local_timestamp', 'min')])
+    .agg({'local_timestamp':['min', 'max']})\
+    .sort_values(['RIDER', ('local_timestamp', 'min')])
 
 # Check if there is overlapp between transmitters (of the same rider)
 # Note: there is only overlap if you include Calibrations
 # because the riders double up when the transmitter is at the end of its lifetime.
 # They also use often the next transmitter as a calibrator.
-for i in df_transmitter.index.get_level_values(0).unique():
-	for j, tid in enumerate(df_transmitter.loc[i].index):
-		try:
-			date_curr_max = df_transmitter.loc[i].loc[tid, ('local_timestamp', 'max')]
-			date_next_min = df_transmitter.loc[i].iloc[j+1][('local_timestamp', 'min')]
+for i in df.RIDER.unique():
+	df_i = df_transmitter.loc[i]
+	for j in range(len(df_i)-1):
+		if df_i.iloc[j][('local_timestamp', 'max')] >= df_i.iloc[j+1][('local_timestamp', 'min')]:
+			print(i, df_i.iloc[j:j+2])
 
-			# if there is overlap
-			if date_curr_max >= date_next_min:
-				print("Overlap transmitters")
-				print(i, df_transmitter.loc[i].iloc[j:j+2])
+"""
+Overlap transmitters
+10                    local_timestamp                    
+                               min                 max
+Transmitter ID                                        
+419RDG         2018-07-21 03:00:20 2018-08-02 09:34:25
+809W41         2018-07-31 23:34:08 2018-11-10 23:14:45
+potentially during the transmitter 809W41, the timestamps were 3 days back
+"""
 
-		except IndexError:
-			pass
-
+# --------------------- sort by transmitter time
 # Create transmitter order
-transmitter_order = {df_transmitter.index.get_level_values(1)[n]:n for n in np.arange(len(df_transmitter))}
+transmitter_order = {df_transmitter.reset_index()['Transmitter ID'][n]:n for n in np.arange(len(df_transmitter))}
 df['transmitter_order'] = df['Transmitter ID'].apply(lambda x: transmitter_order[x] if x in transmitter_order.keys() else len(transmitter_order))
 del transmitter_order ; gc.collect()
 
@@ -296,20 +363,20 @@ df_egv = df[df['Event Type'] == 'EGV']
 df_nonegv = df[df['Event Type'] != 'EGV']
 
 # Sort by: Event Type - RIDER - transmitter_order - Transmitter Time
-df_egv.sort_values(by=['RIDER', 'transmitter_order', 'Transmitter Time (Long Integer)', 'Source Device ID'], inplace=True)
+df_egv = df_egv.sort_values(by=['RIDER', 'transmitter_order', 'Transmitter Time (Long Integer)', 'Source Device ID'])
 df = df_egv.append(df_nonegv)
-df.reset_index(drop=True, inplace=True)
+df = df.reset_index(drop=True)
 
 # For each non-EGV reading, put it in the right rider + time window
-for idx, (i, t) in df.loc[df['Event Type'] != 'EGV', ['RIDER', 'local_timestamp']].iterrows():
-	loc = df.index.get_loc(idx)
+for idx, (i, t) in tqdm(df.loc[df['Event Type'] != 'EGV', ['RIDER', 'local_timestamp']].iterrows()):
+    loc = df.index.get_loc(idx)
 
-	# TODO: what if during travelling?
-	idx_new = df[(df.RIDER == i) & (df.local_timestamp < t) & (df['Event Type'] == 'EGV')].index[-1]
-	loc_new = df.index.get_loc(idx_new)
+    # TODO: what if during travelling?
+    idx_new = df[(df.RIDER == i) & (df.local_timestamp < t) & (df['Event Type'] == 'EGV')].index[-1]
+    loc_new = df.index.get_loc(idx_new)
 
-	df = df.loc[np.insert(np.delete(df.index, loc), loc_new+1, loc)]
-df.reset_index(drop=True, inplace=True)
+    df = df.loc[np.insert(np.delete(df.index, loc), loc_new+1, loc)]
+df.reset_index(inplace=True)
 
 df.to_csv(path+'dexcom_sorted.csv')
 
@@ -326,7 +393,7 @@ df_changes.local_timestamp_min = pd.to_datetime(df_changes.local_timestamp_min)
 df_changes.local_timestamp_max = pd.to_datetime(df_changes.local_timestamp_max)
 
 for (i,n), (idx_min, idx_max, _, _, tz) in df_changes.iterrows():
-	df.loc[idx_min:idx_max, 'timestamp'] = df.loc[idx_min:idx_max, 'local_timestamp'] - tz
+    df.loc[idx_min:idx_max, 'timestamp'] = df.loc[idx_min:idx_max, 'local_timestamp'] - tz
 
 df.sort_values(['RIDER', 'timestamp'], inplace=True)
 df.reset_index(drop=True, inplace=True)
@@ -348,36 +415,36 @@ df['change'] = df['dup'] | df['gap']
 print("Number of changes left: ", df['change'].sum())
 
 print("When transmitter time goes down: ",
-	df[(df['transmitter_diff'] < 0) & (df.RIDER.diff() == 0) & (df['transmitter_order'].diff() == 0) & (df['Event Type'].shift() == df['Event Type']) & (df['Event Type'] == 'EGV')])
+    df[(df['transmitter_diff'] < 0) & (df.RIDER.diff() == 0) & (df['transmitter_order'].diff() == 0) & (df['Event Type'].shift() == df['Event Type']) & (df['Event Type'] == 'EGV')])
 # TODO: it seems that there is only one weird measurement: 322039 and 322471
 # I think these should be calibration measurements, but they are marked as EGV
-# 322471	6	2018-12-18 18:25:02
-# 322039	6	2018-12-17 06:35:09
+# 322471    6    2018-12-18 18:25:02
+# 322039    6    2018-12-17 06:35:09
 
 """
 matplotlib.use('TkAgg')
 
 for i in df['RIDER'].unique():
-	df_i = df[df.RIDER == i]
-	sns.lineplot(data=df_i, x='timestamp', y='Transmitter Time (Long Integer)', hue='Transmitter ID')
-	plt.show()
+    df_i = df[df.RIDER == i]
+    sns.lineplot(data=df_i, x='timestamp', y='Transmitter Time (Long Integer)', hue='Transmitter ID')
+    plt.show()
 
 for _, (i, tid) in df[['RIDER', 'Transmitter ID']].drop_duplicates().iterrows():
-	df_t = df[(df.RIDER == i) & (df['Transmitter ID'] == tid)]
-	#if not df_t['Transmitter Time (Long Integer)'].is_monotonic:
-	if df_t['change'].any():
-		df_t_err = df_t[df_t['change']]
-		df_t.to_csv('timezone/check_%s_%s.csv'%(i,tid))
-		df_t_err.to_csv('timezone/check_%s_%s_err.csv'%(i,tid))
-		print(i, tid, " ERROR")
-		plt.plot(df_t['timestamp'], df_t['Transmitter Time (Long Integer)'])
-		plt.scatter(df_t_err['timestamp'], df_t_err['Transmitter Time (Long Integer)'])
-		plt.show()
-		plt.close()
+    df_t = df[(df.RIDER == i) & (df['Transmitter ID'] == tid)]
+    #if not df_t['Transmitter Time (Long Integer)'].is_monotonic:
+    if df_t['change'].any():
+        df_t_err = df_t[df_t['change']]
+        df_t.to_csv('timezone/check_%s_%s.csv'%(i,tid))
+        df_t_err.to_csv('timezone/check_%s_%s_err.csv'%(i,tid))
+        print(i, tid, " ERROR")
+        plt.plot(df_t['timestamp'], df_t['Transmitter Time (Long Integer)'])
+        plt.scatter(df_t_err['timestamp'], df_t_err['Transmitter Time (Long Integer)'])
+        plt.show()
+        plt.close()
 """
 
 df.drop(['transmitter_order', 'transmitter_diff',  'timestamp_diff', 'timediff', \
-	'gap', 'dup', 'change'], axis=1, inplace=True)
+    'gap', 'dup', 'change'], axis=1, inplace=True)
 df.to_csv(path+'dexcom_utc.csv')
 
 # --------------------- RUN preprocess_timezone_trainingpeaks_dexcom.py here
@@ -399,8 +466,8 @@ df.timestamp = pd.to_datetime(df.timestamp)
 df.rename(columns={'local_timestamp':'local_timestamp_raw'}, inplace=True)
 
 for (i,n), (tz, _, _, ts_min, ts_max, _, _) in df_changes.iterrows():
-	mask_tz = (df.RIDER == i) & (df.timestamp >= ts_min) & (df.timestamp <= ts_max)
-	df.loc[mask_tz, 'local_timestamp'] = df.loc[mask_tz, 'timestamp'] + tz
+    mask_tz = (df.RIDER == i) & (df.timestamp >= ts_min) & (df.timestamp <= ts_max)
+    df.loc[mask_tz, 'local_timestamp'] = df.loc[mask_tz, 'timestamp'] + tz
 
 # TODO: fix all insulin and carbs metrics
 
