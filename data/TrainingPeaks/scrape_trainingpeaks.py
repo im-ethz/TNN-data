@@ -4,90 +4,100 @@ Select by:
 - workout type = bike
 - date range = 01/01/2020 until 31/10/2020 -> 2019
 """
-from config import username_TP, password_TP
-
+from config import credentials, rider_mapping
 import pyderman as dr
 from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
-#from selenium.webdriver.common.by import By
-#from selenium.webdriver.support.ui import WebDriverWait
-#from selenium.webdriver.support import expected_conditions as EC
+from tqdm import tqdm
+
+import pandas as pd 
 import time
 
-download_path = '/local/home/evanweenen/bicyclediabetes/Code/Data/TrainingPeaks/2019/'
+download_path = '/local/home/evanweenen/hype-data/data/TrainingPeaks/export/'
+dates = pd.date_range(start='01-01-2014', end='31-12-2021', freq='30D')
 
 url_login = 'https://home.trainingpeaks.com/login'
 
-#start_dates_list = ['1/1/2020', '1/2/2020', '1/3/2020', '1/4/2020', '1/5/2020', '1/6/2020', '1/7/2020', '1/8/2020', '1/9/2020', '1/10/2020']
-start_dates_list = ['1/12/2018', '1/1/2019', '1/2/2019', '1/3/2019', '1/4/2019', '1/5/2019', '1/6/2019', '1/7/2019', '1/8/2019', '1/9/2019', '1/10/2019', '1/11/2019']
-#end_dates_list = ['31/1/2020', '29/2/2020', '31/3/2020', '30/4/2020', '31/5/2020', '30/6/2020', '31/7/2020', '31/8/2020', '30/9/2020', '31/10/2020']
-end_dates_list = ['31/12/2018', '31/1/2019', '28/2/2019', '31/3/2019', '30/4/2019', '31/5/2019', '30/6/2019', '31/7/2019', '31/8/2019', '30/9/2019', '31/10/2019', '30/11/2019']
-
-path = dr.install(browser=dr.chrome, file_directory='./lib/', verbose=True, chmod=True, overwrite=False, version='86.0.4240.22', filename=None, return_info=False)
+driver_path = dr.install(browser=dr.chrome, file_directory='./lib/', verbose=True, chmod=True, overwrite=False, version='86.0.4240.22', filename=None, return_info=False)
 options = webdriver.ChromeOptions()
 options.add_experimental_option("prefs", {"download.default_directory":download_path})
-driver = webdriver.Chrome(path, options=options)
+driver = webdriver.Chrome(driver_path, options=options)
 driver.maximize_window()
 
 driver.get(url_login)
 
 # login
-driver.find_element_by_name('Username').send_keys(username_TP)
-driver.find_element_by_name('Password').send_keys(password_TP)
+driver.find_element_by_name('Username').send_keys(credentials['TP']['pro']['username'])
+driver.find_element_by_name('Password').send_keys(credentials['TP']['pro']['password'])
 driver.find_element_by_name('submit').click()
-time.sleep(5)#driver.set_page_load_timeout(10)#driver.implicitly_wait(10)
+time.sleep(15)
+
+driver.find_element_by_class_name('calendar').click()
+time.sleep(5)
 
 # select athlete
-driver.find_element_by_xpath("//*[@id='main']/div[1]/div/div/div[2]/div/div/button").click() # dropdown menu
-time.sleep(5)#driver.set_page_load_timeout(10)#driver.implicitly_wait(2)
-athlete_elements = driver.find_elements_by_class_name('athleteOption') # list of athletes
+driver.find_element_by_class_name('groupAndAthleteSelector').click() # dropdown menu
+time.sleep(5)
+athletes = driver.find_elements_by_class_name('athleteOption') # list of athletes
 
-for i in range(1, len(athlete_elements)):
-	athlete_elements[i].click() # click on ith athlete
-	time.sleep(5)#driver.set_page_load_timeout(10)#driver.implicitly_wait(20)
-	
-	# go to list layout
-	driver.find_element_by_class_name('searchButton').click()
-	time.sleep(2)#driver.set_page_load_timeout(10)#driver.implicitly_wait(3)
+k = 0
 
-	# select only bike training (only first time visiting website)
-	if i == 1:
-		driver.find_element_by_class_name('filter').click()
-		driver.set_page_load_timeout(10)#driver.implicitly_wait(20)
-
-		driver.find_element_by_xpath("//*[@id='main']/div[1]/div/div/div[3]/div[3]/div/div[2]/div[5]/div[4]/div[2]/label[2]").click() # select bike
-		driver.set_page_load_timeout(10)#driver.implicitly_wait(10)
-		#driver.find_element_by_xpath("//*[@id='main']/div[1]/div/div/div[3]/div[3]/div/div[2]/div[5]/div[5]/div/div[2]/label[1]").click() # select cycling
-
-	for d in range(len(start_dates_list)):
-		driver.find_element_by_class_name('startDate').clear()
-		driver.find_element_by_class_name('startDate').send_keys(start_dates_list[d]+'\n')
+for i in range(len(athletes)):
+	print(athletes[i].text)
+	if ' '.join(athletes[i].text.split()[1:]).lower() in rider_mapping.keys() or \
+		athletes[i].text.lower() == 'kusztor peter':
+		print("include")
+		athletes[i].click() # click on ith athlete
+		time.sleep(5)
+		k += 1
+		
+		# go to list layout
+		driver.find_element_by_class_name('workoutSearch').click()
 		time.sleep(5)
 
-		driver.find_element_by_class_name('endDate').clear()
-		driver.find_element_by_class_name('endDate').send_keys(end_dates_list[d]+'\n')
-		time.sleep(5)#driver.set_page_load_timeout(10)#driver.implicitly_wait(10)
+		# select only bike training (only first time visiting website)
+		if i == 0:
+			driver.find_element_by_class_name('filter').click()
+			driver.set_page_load_timeout(10)
 
-		activities_elements = driver.find_elements_by_class_name("activity")
-		for j in range(int(driver.find_element_by_class_name('totalHits').text.strip(' results'))):
-			
-			driver.find_elements_by_class_name("activity")[j].click()
-			time.sleep(1)#driver.set_page_load_timeout(10)driver.implicitly_wait(20)
+			driver.find_element_by_xpath("//*[@id='main']/div[1]/div/div/div[3]/div[3]/div/div[2]/div[5]/div[4]/div[2]/label[2]").click() # select bike
+			driver.set_page_load_timeout(10)
 
-			if driver.find_element_by_id('quickViewFileUploadDiv').text != 'Upload':
-				driver.find_element_by_id('quickViewFileUploadDiv').click()
-				driver.set_page_load_timeout(10)#driver.implicitly_wait(4)
+		for d in tqdm(range(len(dates)-1)):
+			start_date = dates[d]
+			end_date = dates[d+1]
 
-				# download
-				driver.find_element_by_class_name('download').click()
-				driver.set_page_load_timeout(10)#driver.implicitly_wait(2)
+			driver.find_element_by_class_name('endDate').clear()
+			driver.find_element_by_class_name('endDate').send_keys(end_date.strftime('%m/%d/%Y')+'\n')
+			time.sleep(5)
 
-			driver.find_element_by_id('closeIcon').click()
-			driver.set_page_load_timeout(10)#driver.implicitly_wait(2)
+			driver.find_element_by_class_name('startDate').clear()
+			driver.find_element_by_class_name('startDate').send_keys(start_date.strftime('%m/%d/%Y')+'\n')
+			time.sleep(15)
 
-	driver.find_element_by_class_name('closeIcon').click()
-	driver.set_page_load_timeout(10)
+			activities = driver.find_elements_by_class_name("activity")
+			time.sleep(2)
+			for j in range(int(driver.find_element_by_class_name('totalHits').text.strip(' results'))):
+				
+				activities[j].click()
+				time.sleep(1)
 
-	driver.find_element_by_xpath("//*[@id='main']/div[1]/div/div/div[2]/div/div/button").click() # dropdown menu
-	driver.set_page_load_timeout(10)#driver.implicitly_wait(1)
-	athlete_elements = driver.find_elements_by_class_name('athleteOption') # list of athletes
+				if driver.find_element_by_id('quickViewFileUploadDiv').text != 'Upload':
+					driver.find_element_by_id('quickViewFileUploadDiv').click()
+					driver.set_page_load_timeout(10)
+
+					# download
+					driver.find_element_by_class_name('download').click()
+					driver.set_page_load_timeout(10)
+
+				driver.find_element_by_id('closeIcon').click()
+				driver.set_page_load_timeout(10)
+
+		driver.find_element_by_class_name('closeIcon').click()
+		driver.set_page_load_timeout(10)
+
+		driver.find_element_by_class_name('groupAndAthleteSelector').click() # dropdown menu
+		time.sleep(10)
+		athletes = driver.find_elements_by_class_name('athleteOption') # list of athletes
+	else:
+		print("exclude")
+		continue

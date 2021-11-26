@@ -1,10 +1,8 @@
 from config import credentials, rider_mapping
 import pyderman as dr
 from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
 
 import pandas as pd
-import datetime
 import time
 
 path = '/local/home/evanweenen/hype-data/data/Dexcom/'

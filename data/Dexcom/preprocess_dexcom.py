@@ -289,29 +289,29 @@ df = df.reset_index(drop=True)
 
 # --------------------- duplicates
 def drop(df, dname, mask):
-	df[mask].to_csv(path+'drop/'+dname+'.csv')
-	print("DROP %s "%mask.sum()+dname)
-	return df[~mask]
+    df[mask].to_csv(path+'drop/'+dname+'.csv')
+    print("DROP %s "%mask.sum()+dname)
+    return df[~mask]
 
 # drop duplicates rows
 df = drop(df, 'duplicated_rows',
-	df.drop('source', axis=1).duplicated(keep='first'))
+    df.drop('source', axis=1).duplicated(keep='first'))
 
 # drop duplicates rows where glucose value is not exactly the same, but the rest is
 # this mostly occurs when data is both in eu and us, and in the merge, 
 # the glucose value from unit conversion (mmol/L to mg/dL) is not exactly the same
 # keep the ones that are from the US
 df = drop(df, 'duplicated_rows_noglucose',
-	df.drop(['source', 'Glucose Value (mg/dL)'], axis=1).duplicated(keep='last'))
+    df.drop(['source', 'Glucose Value (mg/dL)'], axis=1).duplicated(keep='last'))
 
 df = df.sort_values(['RIDER', 'Transmitter ID', 'Transmitter Time (Long Integer)', 'source', 'Source Device ID'])
 # recording with two devices at the same time and data downloaded from the same source (CLARITY EU/US)
 df = drop(df, 'duplicated_rows_fromtworeceivers',
-	(df['Event Type'] == 'EGV') & df.duplicated(['RIDER', 'Transmitter ID', 'Transmitter Time (Long Integer)', 'source'], keep='first'))
+    (df['Event Type'] == 'EGV') & df.duplicated(['RIDER', 'Transmitter ID', 'Transmitter Time (Long Integer)', 'source'], keep='first'))
 
 # recording with two devices at the same time and data downloaded from a different source (CLARITY EU/US)
 df = drop(df, 'duplicated_rows_fromtworeceivers_differentsource',
-	(df['Event Type'] == 'EGV') & df.duplicated(['RIDER', 'Transmitter ID', 'Transmitter Time (Long Integer)'], keep='last'))
+    (df['Event Type'] == 'EGV') & df.duplicated(['RIDER', 'Transmitter ID', 'Transmitter Time (Long Integer)'], keep='last'))
 
 df = df.sort_values(['RIDER', 'local_timestamp', 'Event Type', 'Event Subtype', 'Transmitter Time (Long Integer)'])
 df = df.reset_index(drop=True)
@@ -337,10 +337,10 @@ df_transmitter = df[df['Event Type'] == 'EGV'].groupby(['RIDER', 'Transmitter ID
 # because the riders double up when the transmitter is at the end of its lifetime.
 # They also use often the next transmitter as a calibrator.
 for i in df.RIDER.unique():
-	df_i = df_transmitter.loc[i]
-	for j in range(len(df_i)-1):
-		if df_i.iloc[j][('local_timestamp', 'max')] >= df_i.iloc[j+1][('local_timestamp', 'min')]:
-			print(i, df_i.iloc[j:j+2])
+    df_i = df_transmitter.loc[i]
+    for j in range(len(df_i)-1):
+        if df_i.iloc[j][('local_timestamp', 'max')] >= df_i.iloc[j+1][('local_timestamp', 'min')]:
+            print(i, df_i.iloc[j:j+2])
 
 """
 Overlap transmitters
@@ -372,11 +372,13 @@ for idx, (i, t) in tqdm(df.loc[df['Event Type'] != 'EGV', ['RIDER', 'local_times
     loc = df.index.get_loc(idx)
 
     # TODO: what if during travelling?
-    idx_new = df[(df.RIDER == i) & (df.local_timestamp < t) & (df['Event Type'] == 'EGV')].index[-1]
-    loc_new = df.index.get_loc(idx_new)
+    prev_df = df[(df.RIDER == i) & (df.local_timestamp < t) & (df['Event Type'] == 'EGV')]
+    if not prev_df.empty:
+        idx_new = prev_df.index[-1]
+        loc_new = df.index.get_loc(idx_new)
 
-    df = df.loc[np.insert(np.delete(df.index, loc), loc_new+1, loc)]
-df.reset_index(inplace=True)
+        df = df.loc[np.insert(np.delete(df.index, loc), loc_new+1, loc)]
+df = df.reset_index(drop=True)
 
 df.to_csv(path+'dexcom_sorted.csv')
 
