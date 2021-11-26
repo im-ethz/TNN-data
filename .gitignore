@@ -36,6 +36,7 @@ config.py
 /data/_archive/Dexcom/_archive/*
 /data/_archive/Dexcom/_backup/*
 
+/data/TrainingPeaks/export/*
 /data/TrainingPeaks/2019/glucose/*
 /data/TrainingPeaks/2019/timezone/*
 /data/TrainingPeaks/2019/clean3/*
