@@ -1,4 +1,3 @@
-# TODO: some laps might be missng due to a bug!!
 """
 Parse Garmin FIT files to CSV
 Makes use of the library https://github.com/dtcooper/python-fitparse
@@ -28,183 +27,144 @@ import numpy as np
 import pandas as pd
 import os
 
-parser = argparse.ArgumentParser()
-parser.add_argument('filename', type=str, help="Name of the fitfile to convert")
-parser.add_argument('-i', '--input', type=str, default='', help="Path to the directory where the fitfile is located")
-parser.add_argument('-o', '--output', type=str, default='', help="Path to the directory where to save the csv")
-parser.add_argument('-v', '--verbose', type=bool, default=False, help="Whether to give strings on progress to the command line")
-args = parser.parse_args()
+class FIT(object):
+    def __init__(self, filename, path):
+        self.filename = filename
+        self.path = path
 
-fname = args.filename.rstrip('.fit')
+    def read_data(self):
+        file = fitparse.FitFile(os.path.join(self.path, self.filename))
 
+        categories = []
+        for message in file.messages:
+            try:
+                cat = message.mesg_type.name
+            except:
+                cat = message.mesg_type
+            categories.append(cat)
+        categories = pd.DataFrame(categories)[0]
 
-# ----------------- read data
-if args.verbose:
-	print("Reading in data ...")
+        data_nans = np.array(file.messages)[categories.isna()] # extract nan messages
 
-fitfile = fitparse.FitFile(args.input + '/' + args.filename)
+        self.categories = categories.unique().tolist()
 
-message_types = []
-for m in fitfile.messages:
-	try:
-		message_types_m = m.mesg_type.name
-	except:
-		message_types_m = m.mesg_type
-	message_types.append(message_types_m)
-message_types = pd.DataFrame(message_types)[0]
+        self.data = {cat: list(file.get_messages(cat)) for cat in self.categories}
+        self.data.update({None:data_nans})
 
-data_nans = np.array(fitfile.messages)[message_types.isna()] # extract nan messages
+    def get_messages(self, df, cat):
+        if cat in self.data:
+            for message in self.data[cat]:
+                for field in message:
+                    df.loc[cat, field.name] = field.value
+            self.categories.remove(cat)
+        return df
 
-message_types = message_types.unique().tolist()
+    def get_category(self, cat):
+        if cat in self.data:
+            df = pd.DataFrame()
+            for i, message in enumerate(self.data[cat]):
+                for field in message.fields:
+                    try:
+                        df.loc[i,field.name] = field.value
+                    except ValueError:
+                        continue
+            self.categories.remove(cat)
+            return df
 
-data = {i: list(fitfile.get_messages(i)) for i in message_types}
-data.update({None:data_nans})
+    def get_laps(self):
+        if 'lap' in self.data:
+            df = pd.DataFrame()
+            for i, message in enumerate(self.data['lap']):
+                for field in message.fields:
+                    if type(field.value) != tuple:
+                        df.loc[i,field.name] = field.value
+                    else:
+                        try:
+                            df.at[i,field.name] = field.value
+                            break
+                        except:
+                            df[field.name] = df[field.name].astype(object)
+                            df.at[i,field.name] = field.value
+                            break
+                        else:
+                            break
+            self.categories.remove('lap')
+            return df
 
-df = dict()
-# ----------------- info
-if args.verbose:
-	print("Creating info file ...")
+    def get_header(self, device):
+        df = pd.Series(dtype=object)
+        df.index = pd.MultiIndex.from_product([[], df.index])
 
-df['info'] = pd.Series(dtype=object)
+        df = self.get_messages(df, 'file_id')
+        df = self.get_messages(df, 'workout')
+        df = self.get_messages(df, 'sport')
+        df = self.get_messages(df, 'activity')
+        df = self.get_messages(df, 'session')
+        df = self.get_messages(df, 'training_file')
 
-# file id
-for message in data['file_id']:
-	for field in message:
-		df['info'].loc[field.name] = field.value
-df['info'].index = pd.MultiIndex.from_product([["file_id"], df['info'].index])
-message_types.remove('file_id')
+        # field description
+        if 'field_description' in self.data:
+            for message in self.data['field_description']:
+                df.loc['units', message.fields[3].value] = message.fields[4].value
+            self.categories.remove('field_description')
 
-# workout
-if 'workout' in data:
-	for message in data['workout']:
-		for field in message:
-			df['info'].loc['workout', field.name] = field.value
-	message_types.remove('workout')
+        # hr_zone
+        if 'hr_zone' in self.data:
+            for i, field in enumerate(self.data['hr_zone'][0].fields):
+                if field.name == 'high_bpm':
+                    hr_zone_field = i
+            df.loc['hr_zone', self.data['hr_zone'][0].name+' [%s]'%self.data['hr_zone'][0].fields[hr_zone_field].units] = [message.fields[hr_zone_field].value for message in self.data['hr_zone']]
+            self.categories.remove('hr_zone')
 
-# sport
-if 'sport' in data:
-	for message in data['sport']:
-		for field in message:
-			df['info'].loc['sport', field.name] = field.value
-	message_types.remove('sport')
+        # power_zone
+        if 'power_zone' in self.data:
+            for i, field in enumerate(self.data['power_zone'][0].fields):
+                if field.name == 'high_value':
+                    power_zone_field = i
+            df.loc['power_zone', self.data['power_zone'][0].name+' [%s]'%self.data['power_zone'][0].fields[power_zone_field].units] = [message.fields[power_zone_field].value for message in self.data['power_zone']]
+            self.categories.remove('power_zone')
 
-# activity
-if 'activity' in data:
-	for message in data['activity']:
-		for field in message:
-			df['info'].loc['activity', field.name] = field.value
-	message_types.remove('activity')
+        # device info
+        if "serial_number" in device.columns:
+            for i, item in enumerate(device.serial_number.dropna().unique()):
+                row = device[device.serial_number == item].dropna(axis=1).drop('timestamp', axis=1).drop_duplicates().iloc[0]
+                row.index = pd.MultiIndex.from_product([["device_%i"%i], row.index])
+                df = df.append(row)
+        else:
+            for i, item in device.iterrows():
+                item.index = pd.MultiIndex.from_product([["device_0"], item.index])
+                df = df.append(item)
 
-# field description
-if 'field_description' in data:
-	for message in data['field_description']:
-		df['info'].loc['units', message.fields[3].value] = message.fields[4].value
-	message_types.remove('field_description')
+        return df
 
-# hr_zone
-if 'hr_zone' in data:
-	for i, field in enumerate(data['hr_zone'][0].fields):
-		if field.name == 'high_bpm':
-			hr_zone_field = i
-	df['info'].loc['hr_zone', data['hr_zone'][0].name+' [%s]'%data['hr_zone'][0].fields[hr_zone_field].units] = [message.fields[hr_zone_field].value for message in data['hr_zone']]
-	message_types.remove('hr_zone')
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('filename', type=str, help="Name of the fitfile to convert")
+    parser.add_argument('-i', '--input', type=str, default='', help="Path to the directory where the fitfile is located")
+    parser.add_argument('-o', '--output', type=str, default='', help="Path to the directory where to save the csv")
+    args = parser.parse_args()
 
-# power_zone
-if 'power_zone' in data:
-	for i, field in enumerate(data['power_zone'][0].fields):
-		if field.name == 'high_value':
-			power_zone_field = i
-	df['info'].loc['power_zone', data['power_zone'][0].name+' [%s]'%data['power_zone'][0].fields[power_zone_field].units] = [message.fields[power_zone_field].value for message in data['power_zone']]
-	message_types.remove('power_zone')
+    fit = FIT(args.filename, args.input)
+    fit.read_data()
 
-# session
-if 'session' in data:
-	for message in data['session']:
-		for field in message:
-			df['info'].loc['session', field.name] = field.value
-	message_types.remove('session')
+    out = dict()
 
-# training file
-if 'training_file' in data:
-	for message in data['training_file']:
-		for field in message:
-			df['info'].loc['training_file', field.name] = field.value
-	message_types.remove('training_file')
+    out['device'] = fit.get_category('device_info')
+    out['info'] = fit.get_header(out['device'])
 
+    out['data'] = fit.get_category('record')
+    out['nan'] = fit.get_category('nan')
+    out['startstop'] = fit.get_category('event')
+    out['laps'] = fit.get_laps()
+   
+    if len(fit.categories) != 0:
+        print("Message types not processed: ", *tuple(fit.categories))
 
-# ----------------- data
-if args.verbose:
-	print("Creating data files ...")
+    for cat, df in out.items():
+        if not os.path.exists(os.path.join(args.output, cat)):
+            os.makedirs(os.path.join(args.output, cat))
+        if df:
+        	df.to_csv(os.path.join(args.output, cat, args.filename.rstrip('.fit')+'_'+cat+'.csv'))
 
-def unpack_messages(messages):
-	df = pd.DataFrame()
-	for i, message in enumerate(messages):
-		for field in message.fields:
-			df.loc[i,field.name] = field.value
-	return df
-
-# record
-df['data'] = unpack_messages(data['record'])
-message_types.remove('record')
-
-# None
-try:
-	df['nan'] = unpack_messages(data[None])
-	message_types.remove(None)
-except ValueError:
-	pass
-
-# device
-try:
-	df['device'] = unpack_messages(data['device_info'])
-except ValueError:
-	df['device'] = pd.DataFrame()
-	for i, message in enumerate(data['device_info']):
-		for field in message.fields:
-			try:
-				df['device'].loc[i,field.name] = field.value
-			except ValueError:
-				continue
-if "serial_number" in df['device'].columns:
-	for i, item in enumerate(df['device'].serial_number.dropna().unique()):
-		df_tmp = df['device'][df['device'].serial_number == item].dropna(axis=1).drop('timestamp', axis=1).drop_duplicates().iloc[0]
-		df_tmp.index = pd.MultiIndex.from_product([["device_%i"%i], df_tmp.index])
-		df['info'] = df['info'].append(df_tmp)
-else:
-	for i, item in df['device'].iterrows():
-		item.index = pd.MultiIndex.from_product([["device_0"], item.index])
-		df['info'] = df['info'].append(item)
-message_types.remove('device_info')
-
-# event
-df['startstop'] = unpack_messages(data['event'])
-message_types.remove('event')
-
-# laps
-if 'lap' in data:
-	df['laps'] = pd.DataFrame()
-	for i, message in enumerate(data['lap']):
-		for field in message.fields:
-			if type(field.value) != tuple:
-				df['laps'].loc[i,field.name] = field.value
-			else:
-				try:
-					df['laps'].at[i,field.name] = field.value
-					break
-				except:
-					df['laps'][field.name] = df['laps'][field.name].astype(object)
-					df['laps'].at[i,field.name] = field.value
-					break
-				else:
-					break
-	message_types.remove('lap')
-
-# ----------------- save files
-if args.verbose:
-	print("Saving data ...")
-	print("Message types not processed: ", *tuple(message_types))
-
-for name, df_i in df.items():
-	if not os.path.exists(args.output + '/' + name):
-		os.mkdir(args.output + '/' + name)
-	df_i.to_csv(args.output + '/' + name + '/' + fname + '_' + name + '.csv')
+if __name__ == '__main__':
+    main()
