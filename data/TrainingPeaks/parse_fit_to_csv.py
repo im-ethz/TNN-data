@@ -163,7 +163,7 @@ def main():
     for cat, df in out.items():
         if not os.path.exists(os.path.join(args.output, cat)):
             os.makedirs(os.path.join(args.output, cat))
-        if df:
+        if df is not None:
         	df.to_csv(os.path.join(args.output, cat, args.filename.rstrip('.fit')+'_'+cat+'.csv'))
 
 if __name__ == '__main__':
