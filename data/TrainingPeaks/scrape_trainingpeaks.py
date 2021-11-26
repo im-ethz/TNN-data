@@ -72,10 +72,11 @@ for i in range(len(athletes)):
 
 			driver.find_element_by_class_name('startDate').clear()
 			driver.find_element_by_class_name('startDate').send_keys(start_date.strftime('%m/%d/%Y')+'\n')
-			time.sleep(15)
+
+			driver.find_element_by_class_name('endDate').send_keys('\n')
+			time.sleep(25)
 
 			activities = driver.find_elements_by_class_name("activity")
-			time.sleep(2)
 			for j in range(int(driver.find_element_by_class_name('totalHits').text.strip(' results'))):
 				
 				activities[j].click()
