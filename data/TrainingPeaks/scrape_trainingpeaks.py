@@ -39,7 +39,7 @@ driver.find_element_by_class_name('groupAndAthleteSelector').click() # dropdown 
 time.sleep(5)
 athletes = driver.find_elements_by_class_name('athleteOption') # list of athletes
 
-k = 0
+retry = True
 
 for i in range(len(athletes)):
 	print(athletes[i].text)
@@ -48,14 +48,13 @@ for i in range(len(athletes)):
 		print("include")
 		athletes[i].click() # click on ith athlete
 		time.sleep(5)
-		k += 1
 		
 		# go to list layout
 		driver.find_element_by_class_name('workoutSearch').click()
 		time.sleep(5)
 
 		# select only bike training (only first time visiting website)
-		if i == 0:
+		if i == 0 or retry:
 			driver.find_element_by_class_name('filter').click()
 			driver.set_page_load_timeout(10)
 
