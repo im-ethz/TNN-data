@@ -23,6 +23,7 @@
 
 .~lock.*
 
+credentials.yml
 config.py
 
 /data/Dexcom/*.csv
@@ -30,6 +31,7 @@ config.py
 /data/Dexcom/drop/*
 /data/Dexcom/export/*
 /data/Dexcom/timezone/*
+/data/Dexcom/clean/*
 
 /data/TrainingPeaks/out/*
 /data/TrainingPeaks/export/*
