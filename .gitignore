@@ -37,17 +37,15 @@ config.py
 /data/_archive/Dexcom/_backup/*
 
 /data/TrainingPeaks/export/*
-/data/TrainingPeaks/2019/glucose/*
-/data/TrainingPeaks/2019/timezone/*
-/data/TrainingPeaks/2019/clean3/*
-/data/TrainingPeaks/2019/clean2/*
-/data/TrainingPeaks/2019/clean/*
-/data/TrainingPeaks/2019/combine/*
-/data/TrainingPeaks/2019/csv/*
-/data/TrainingPeaks/2019/fit/*
-/data/TrainingPeaks/2019/raw_anonymous/*
-/data/TrainingPeaks/2019/raw/*
-/data/TrainingPeaks/2019/_bin/*
+/data/TrainingPeaks/glucose/*
+/data/TrainingPeaks/timezone/*
+/data/TrainingPeaks/clean3/*
+/data/TrainingPeaks/clean2/*
+/data/TrainingPeaks/clean/*
+/data/TrainingPeaks/combine/*
+/data/TrainingPeaks/csv/*
+/data/TrainingPeaks/fit/*
+/data/TrainingPeaks/export/*
 
 /data/_archive/TrainingPeaks/2020/clean2/*
 /data/_archive/TrainingPeaks/2020/clean/*
