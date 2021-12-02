@@ -13,7 +13,7 @@
 *.idx
 *.ilg
 *.ind
-#*.out
+*.out
 *.url
 *.svn
 *.toc
@@ -21,21 +21,17 @@
 */__pycache__/
 *.pyc
 
+.~lock.*
+
 config.py
 
 /data/Dexcom/*.csv
 /data/Dexcom/*.xlsx
 /data/Dexcom/drop/*
 /data/Dexcom/export/*
-/data/Dexcom/timezone/*.csv
+/data/Dexcom/timezone/*
 
-/data/_archive/LibreView/clean/*
-/data/_archive/LibreView/raw_anonymous/*
-/data/_archive/LibreView/raw/*
-/data/_archive/LibreView/_bin/*
-/data/_archive/Dexcom/_archive/*
-/data/_archive/Dexcom/_backup/*
-
+/data/TrainingPeaks/out/*
 /data/TrainingPeaks/export/*
 /data/TrainingPeaks/glucose/*
 /data/TrainingPeaks/timezone/*
@@ -47,24 +43,12 @@ config.py
 /data/TrainingPeaks/fit/*
 /data/TrainingPeaks/export/*
 
-/data/_archive/TrainingPeaks/2020/clean2/*
-/data/_archive/TrainingPeaks/2020/clean/*
-/data/_archive/TrainingPeaks/2020/combine/*
-/data/_archive/TrainingPeaks/2020/csv/*
-/data/_archive/TrainingPeaks/2020/fit/*
-/data/_archive/TrainingPeaks/2020/raw_anonymous/*
-/data/_archive/TrainingPeaks/2020/raw/*
-/data/_archiveTrainingPeaks/2020/_bin/*
+/data/_archive/*
 
 /data/TrainingPeaks+Dexcom/*.csv
 /data/TrainingPeaks+Dexcom/_bin/*
 /data/TrainingPeaks+Dexcom/_backup/*
 /data/TrainingPeaks+Dexcom/timezone/*
-
-/data/_archive/TrainingPeaks+LibreView/resample_1min/*
-/data/_archive/TrainingPeaks+LibreView/1sec/*
-/data/_archive/TrainingPeaks+LibreView/raw/*
-/data/_archive/TrainingPeaks+LibreView/_bin/*
 
 /data/CampCalifornia/*
 
@@ -75,8 +59,6 @@ config.py
 /data/fitness/TEST ANALYSIS Dec_2018.xlsx
 
 /data/info/*
-
-/data/_archive/*
 
 /data_final/*.csv
 /data_final/*.xls
