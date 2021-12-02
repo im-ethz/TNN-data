@@ -1,21 +1,21 @@
 #!/bin/bash
-path='2019/'
-path_raw='raw_anonymous/'
-athletes=("1" "2" "3" "4" "5" "6" "10" "12" "13" "14" "15")
+path='data/TrainingPeaks/'
+name="kusztor"
+i="13"
 
-mkdir "${path}fit/"
-mkdir "${path}csv/"
-for i in ${athletes[*]}
+path_raw="${path}export/${name}/"
+path_fit="${path}fit/${i}/"
+path_csv="${path}csv/${i}/"
+
+mkdir ${path_fit}
+mkdir ${path_csv}
+for filepath in "${path_raw}"*.gz
 do
-	mkdir "${path}fit/${i}"
-	mkdir "${path}csv/${i}"
-	echo "Processing athlete ${i}"
-	for filepath in "${path}${path_raw}${i}/"*.gz
-	do
-		filename=$(basename "${filepath}" .fit.gz)
-		echo "${filename}"
-		gzip -dk "${filepath}"
-		mv "${path}${path_raw}${i}/${filename}.fit" "${path}fit/${i}/${filename}.fit"
-		python3 parse_fit_to_csv.py "${filename}.fit" -i "${path}fit/${i}/" -o "${path}csv/${i}/"
-	done
+    filename=$(basename "${filepath}" .fit.gz)
+    if ! [ -f "${path_csv}record/${filename}_record.csv" ] ; then
+        echo "${filename}"
+        gzip -dk "${filepath}"
+        mv "${path_raw}/${filename}.fit" "${path_fit}/${filename}.fit"
+        python3 data/TrainingPeaks/parse_fit_to_csv.py "${filename}.fit" -i ${path_fit} -o ${path_csv}
+    fi
 done
