@@ -6,20 +6,24 @@ Uses the following message types:
 - workout
 - sport
 - activity
+- session
+- training_file
+- user_profile
+- device_settings
+- zones_target
+- bike_profile
+- weight_scale
 - field_description
 - hr_zone
 - power_zone
-- session
-- training_file
 - record
 - device_info
 - event
 - lap
+- hrv
+
 The following message types are ignored:
 - file creator - doesn't contain anything interesting it seems
-- device_settings - nothing relevant
-- user_profile - we already know this stuff from trainingpeaks
-- zones_target - contains threshold  power, threshold heart rate and max heartrate
 """
 import fitparse
 import argparse
@@ -28,12 +32,13 @@ import pandas as pd
 import os
 
 class FIT(object):
-    def __init__(self, filename, path):
+    def __init__(self, filename, path_in, path_out):
         self.filename = filename
-        self.path = path
+        self.path_in = path_in
+        self.path_out = path_out
 
     def read_data(self):
-        file = fitparse.FitFile(os.path.join(self.path, self.filename))
+        file = fitparse.FitFile(os.path.join(self.path_in, self.filename))
 
         categories = []
         for message in file.messages:
@@ -52,7 +57,7 @@ class FIT(object):
         self.data.update({None:data_nans})
 
     def get_messages(self, df, cat):
-        if cat in self.data:
+        if cat in self.categories:
             for message in self.data[cat]:
                 for field in message:
                     df.loc[cat, field.name] = field.value
@@ -60,7 +65,7 @@ class FIT(object):
         return df
 
     def get_category(self, cat):
-        if cat in self.data:
+        if cat in self.categories:
             df = pd.DataFrame()
             for i, message in enumerate(self.data[cat]):
                 for field in message.fields:
@@ -69,10 +74,24 @@ class FIT(object):
                     except ValueError:
                         continue
             self.categories.remove(cat)
+            self.save_file(df, cat)
+            return df
+
+    def get_hrv(self):
+        if 'hrv' in self.categories:
+            df = pd.DataFrame(columns=range(5))
+            for i, message in enumerate(self.data['hrv']):
+                for field in message.fields:
+                    try:
+                        df.loc[i] = field.value
+                    except ValueError:
+                        continue
+            self.categories.remove('hrv')
+            self.save_file(df, 'hrv')
             return df
 
     def get_laps(self):
-        if 'lap' in self.data:
+        if 'lap' in self.categories:
             df = pd.DataFrame()
             for i, message in enumerate(self.data['lap']):
                 for field in message.fields:
@@ -89,6 +108,9 @@ class FIT(object):
                         else:
                             break
             self.categories.remove('lap')
+
+            self.save_file(df, 'lap')
+
             return df
 
     def get_header(self, device):
@@ -101,11 +123,19 @@ class FIT(object):
         df = self.get_messages(df, 'activity')
         df = self.get_messages(df, 'session')
         df = self.get_messages(df, 'training_file')
+        df = self.get_messages(df, 'user_profile')
+        df = self.get_messages(df, 'device_settings')
+        df = self.get_messages(df, 'zones_target')
+        df = self.get_messages(df, 'bike_profile')
+        df = self.get_messages(df, 'weight_scale')
 
         # field description
         if 'field_description' in self.data:
             for message in self.data['field_description']:
-                df.loc['units', message.fields[3].value] = message.fields[4].value
+                try:
+                    df.loc['units', message.fields[3].value] = message.fields[4].value
+                except IndexError:
+                    continue
             self.categories.remove('field_description')
 
         # hr_zone
@@ -125,17 +155,25 @@ class FIT(object):
             self.categories.remove('power_zone')
 
         # device info
-        if "serial_number" in device.columns:
-            for i, item in enumerate(device.serial_number.dropna().unique()):
-                row = device[device.serial_number == item].dropna(axis=1).drop('timestamp', axis=1).drop_duplicates().iloc[0]
-                row.index = pd.MultiIndex.from_product([["device_%i"%i], row.index])
-                df = df.append(row)
-        else:
-            for i, item in device.iterrows():
-                item.index = pd.MultiIndex.from_product([["device_0"], item.index])
-                df = df.append(item)
+        if device is not None:
+            if "serial_number" in device.columns:
+                for i, item in enumerate(device.serial_number.dropna().unique()):
+                    row = device[device.serial_number == item].dropna(axis=1).drop('timestamp', axis=1).drop_duplicates().iloc[0]
+                    row.index = pd.MultiIndex.from_product([["device_%i"%i], row.index])
+                    df = df.append(row)
+            else:
+                for i, item in device.iterrows():
+                    item.index = pd.MultiIndex.from_product([["device_0"], item.index])
+                    df = df.append(item)
+
+        self.save_file(df, 'info')
 
         return df
+
+    def save_file(self, df, cat):
+        if not os.path.exists(os.path.join(self.path_out, str(cat))):
+            os.makedirs(os.path.join(self.path_out, str(cat)))
+        df.to_csv(os.path.join(self.path_out, str(cat), self.filename.rstrip('.fit')+'_'+str(cat)+'.csv'))
 
 def main():
     parser = argparse.ArgumentParser()
@@ -144,27 +182,20 @@ def main():
     parser.add_argument('-o', '--output', type=str, default='', help="Path to the directory where to save the csv")
     args = parser.parse_args()
 
-    fit = FIT(args.filename, args.input)
+    fit = FIT(args.filename, args.input, args.output)
     fit.read_data()
 
-    out = dict()
+    device = fit.get_category('device_info') # previously: device
+    fit.get_header(device)
 
-    out['device'] = fit.get_category('device_info')
-    out['info'] = fit.get_header(out['device'])
-
-    out['data'] = fit.get_category('record')
-    out['nan'] = fit.get_category('nan')
-    out['startstop'] = fit.get_category('event')
-    out['laps'] = fit.get_laps()
+    fit.get_category('record') # previously: data
+    fit.get_category('hrv')
+    fit.get_category(None) # previously: nan
+    fit.get_category('event') # previously: startstop
+    fit.get_laps() # previosly: laps
    
     if len(fit.categories) != 0:
         print("Message types not processed: ", *tuple(fit.categories))
-
-    for cat, df in out.items():
-        if not os.path.exists(os.path.join(args.output, cat)):
-            os.makedirs(os.path.join(args.output, cat))
-        if df is not None:
-        	df.to_csv(os.path.join(args.output, cat, args.filename.rstrip('.fit')+'_'+cat+'.csv'))
 
 if __name__ == '__main__':
     main()
