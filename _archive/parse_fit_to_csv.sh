@@ -1,7 +1,7 @@
 #!/bin/bash
 path='data/TrainingPeaks/'
-name="kusztor"
-i="13"
+name="planet"
+i="15"
 
 path_raw="${path}export/${name}/"
 path_fit="${path}fit/${i}/"
