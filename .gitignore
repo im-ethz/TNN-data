@@ -64,3 +64,5 @@ config.py
 
 /data_final/*.csv
 /data_final/*.xls
+
+/lib/*
