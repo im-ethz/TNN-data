@@ -23,42 +23,16 @@
 
 .~lock.*
 
-credentials.yml
-config.py
-
-/data/Dexcom/*.csv
-/data/Dexcom/*.xlsx
-/data/Dexcom/drop/*
-/data/Dexcom/export/*
-/data/Dexcom/timezone/*
-/data/Dexcom/clean/*
-
-/data/TrainingPeaks/out/*
-/data/TrainingPeaks/export/*
-/data/TrainingPeaks/glucose/*
-/data/TrainingPeaks/timezone/*
-/data/TrainingPeaks/clean3/*
-/data/TrainingPeaks/clean2/*
-/data/TrainingPeaks/clean/*
-/data/TrainingPeaks/combine/*
-/data/TrainingPeaks/csv/*
-/data/TrainingPeaks/fit/*
-/data/TrainingPeaks/export/*
-
-/data/_archive/*
-
-/data/TrainingPeaks+Dexcom/*.csv
-/data/TrainingPeaks+Dexcom/_bin/*
-/data/TrainingPeaks+Dexcom/_backup/*
-/data/TrainingPeaks+Dexcom/timezone/*
+*.yml
+dexcom_id.csv
 
 /data/CampCalifornia/*
 
 /data/calendar/*.csv
 /data/calendar/*.xls
 
-/data/fitness/fitness_analysis_2019_anonymous.csv
-/data/fitness/TEST ANALYSIS Dec_2018.xlsx
+/data/fitness/*.csv
+/data/fitness/*.xlsx
 
 /data/info/*
 
