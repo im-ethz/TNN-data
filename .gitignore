@@ -26,16 +26,6 @@
 *.yml
 dexcom_id.csv
 
-/data/CampCalifornia/*
-
-/data/calendar/*.csv
-/data/calendar/*.xls
-
-/data/fitness/*.csv
-/data/fitness/*.xlsx
-
-/data/info/*
-
 /data_final/*.csv
 /data_final/*.xls
 
