@@ -304,7 +304,7 @@ def clean(i, verbose=False):
 def local_timestamp(i, verbose=False):
 	################ PREREQUISITE: 
 	## preprocess_dexcom.py: create {root}/timezone.csv
-	tz = pd.read_csv('/'.join(root.split('/')[:-2])+'/timezone.csv', index_col=0)
+	tz = pd.read_csv(DATA_PATH+'/timezone.csv', index_col=0)
 	tz['date'] = pd.to_datetime(tz['date'])
 	tz['timezone'] = pd.to_timedelta(tz['timezone'])
 
@@ -327,7 +327,7 @@ def glucose():
 	################ PREREQUISITE: 
 	## preprocess_dexcom.py: create {root}/Dexcom/dexcom_clean.csv
 
-	df_dc = pd.read_csv('/'.join(root.split('/')[:-2])+'/Dexcom/clean/dexcom_clean.csv', index_col=0)
+	df_dc = pd.read_csv(DATA_PATH+'/Dexcom/clean/dexcom_clean.csv', index_col=0)
 	df_dc['timestamp'] = pd.to_datetime(df_dc['timestamp'])
 	df_dc['local_timestamp'] = pd.to_datetime(df_dc['local_timestamp'])
 
@@ -378,7 +378,7 @@ def glucose():
 		del df, df_glucose; gc.collect()
 
 	df_dc = df_dc.sort_values(['RIDER', 'timestamp'])
-	df_dc.to_csv('/'.join(root.split('/')[:-2])+'/Dexcom/clean/dexcom_clean2.csv', index_label=0)
+	df_dc.to_csv(DATA_PATH+'/Dexcom/clean/dexcom_clean2.csv', index_label=0)
 
 def features(i, verbose=0):
 	df = pd.read_csv(f'{root}clean/{i}/{i}_data3.csv')
@@ -482,6 +482,12 @@ def features(i, verbose=0):
 	df.left_right_balance = pd.to_numeric(df.left_right_balance)
 	print("CLEAN: left-right balance")
 
+	# -------------------- Heart rate
+	if df.heart_rate.apply(lambda x: isinstance(x, str)).any():
+		df['heart_rate'] = df['heart_rate'].replace({'\n                            ': np.nan})
+	df['heart_rate'] = pd.to_numeric(df['heart_rate'])
+	print("CLEAN: heart_rate")
+
 	# -------------------- Enhanced altitude
 	# check if enhanced_altitude equals altitude
 	print("CHECK: enhanced altitude does not equal altitude %s times"\
@@ -554,6 +560,8 @@ def main():
 	for i in athletes:
 		print("\n------------------------------- Athlete ", i)
 		features(i)
+
+	# TODO: use timezone.csv to fillna countries and timezones
 
 if __name__ == '__main__':
 	main()
