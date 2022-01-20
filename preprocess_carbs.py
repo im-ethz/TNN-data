@@ -1,9 +1,10 @@
-import pandas as pd 
+import pandas as pd
+from config import DATA_PATH
 
-path = './data/carbs/'
+root = DATA_PATH+'carbs/'
 
 # read data from FAO (2017) downloaded from https://ourworldindata.org/diet-compositions
-df = pd.read_csv(path+'/daily-caloric-supply-derived-from-carbohydrates-protein-and-fat.csv')
+df = pd.read_csv(root+'/daily-caloric-supply-derived-from-carbohydrates-protein-and-fat.csv')
 
 # select most recent year (2013)
 df = df[df.Year == df.Year.max()]
@@ -16,4 +17,4 @@ df = df.rename(columns={'Entity'                                    :'country',
 					    'Calories from plant protein (FAO (2017))'	:'plant protein (kcal)',
 					    'Calories from fat (FAO (2017))'			:'fat (kcal)',
 					    'Calories from carbohydrates (FAO (2017))'	:'carbohydrates (kcal)'})
-df.to_csv(path+'/country_nutrients.csv', index_label=False)
+df.to_csv(root+'/country_nutrients.csv', index_label=False)

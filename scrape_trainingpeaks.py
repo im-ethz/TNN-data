@@ -1,4 +1,4 @@
-from config import credentials, rider_mapping
+from config import credentials, rider_mapping, DATA_PATH
 import pyderman as dr
 from selenium import webdriver
 from tqdm import tqdm
@@ -122,7 +122,7 @@ def main():
 	"""
 	scraper = Scraper(dates=pd.date_range(start='01-01-2014', end='31-12-2021', freq='30D'))
 
-	scraper.open_driver(download_path='/local/home/evanweenen/hype-data/data/TrainingPeaks/export/')
+	scraper.open_driver(download_path=DATA_PATH+'TrainingPeaks/export/')
 	scraper.login(url_login='https://home.trainingpeaks.com/login', credentials=credentials['TP']['pro'])
 
 	scraper.click_calendar()

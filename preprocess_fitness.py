@@ -3,12 +3,13 @@ import os
 import numpy as np
 import pandas as pd
 
-from config import rider_mapping
+from config import rider_mapping, DATA_PATH
 
-path = '/wave/hypex/data/fitness/'
+root = DATA_PATH+'fitness/'
+
 rider_mapping = {k.upper() : v for k, v in rider_mapping.items()}
 
-df = pd.read_excel(path+'TEST ANALYSIS Dec_2018.xlsx', nrows=16, header=(0,1), sheet_name=None)
+df = pd.read_excel(root+'TEST ANALYSIS Dec_2018.xlsx', nrows=16, header=(0,1), sheet_name=None)
 
 # make sure all tabs are using the same units
 df['Dec_2018'].loc[:,('VT1 (GET)', 'VO2%max')] /= 100
@@ -38,4 +39,4 @@ df = df.drop('level_1', axis=1)
 df = df.rename(columns={'level_0':'date'})
 df = df.set_index(['RIDER', 'date']).sort_index()
 
-df.to_csv(path+'fitness.csv')
+df.to_csv(root+'fitness.csv')

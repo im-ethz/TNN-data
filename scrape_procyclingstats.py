@@ -6,9 +6,9 @@ from tqdm import tqdm
 import requests
 from bs4 import BeautifulSoup
 
-from config import rider_mapping
+from config import rider_mapping, DATA_PATH
 
-root = '/wave/hypex/data/calendar/'
+root = DATA_PATH+'calendar/'
 
 riders = ('oliver-behringer',
           'andrea-peron',

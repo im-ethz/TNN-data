@@ -13,12 +13,12 @@ tzwhere = tzwhere.tzwhere()
 
 from bike2csv.converter import Converter as Convert2CSV
 
-from config import rider_mapping_inv
+from config import rider_mapping_inv, DATA_PATH
 from helper import isnan, print_times_dates, country_names, country_timezones, country_names_inv
 from calc import semicircles_to_degrees
 from timezone import get_timezones_trainingpeaks
 
-root = '/wave/hypex/data/TrainingPeaks/'#'data/TrainingPeaks/'
+root = DATA_PATH+'TrainingPeaks/'
 
 def get_country_from_gps(df:pd.DataFrame):
 	# use geopy with OpenStreetMap to look up country from coordinates

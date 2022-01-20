@@ -1,11 +1,12 @@
-from config import credentials, rider_mapping
+from config import credentials, rider_mapping, DATA_PATH
 import pyderman as dr
 from selenium import webdriver
 
 import pandas as pd
 import time
 
-path = '/local/home/evanweenen/hype-data/data/Dexcom/'
+path = DATA_PATH+'Dexcom/'
+
 dates = pd.date_range(start='01-01-2014', end='31-12-2021', freq='90D')
 
 athletes = pd.read_csv(path+'dexcom_id.csv', index_col=0, dtype={'US':object, 'EU':object}) # beadle missing

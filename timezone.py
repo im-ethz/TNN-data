@@ -503,7 +503,7 @@ def remove_faulty_timezones(tz):
     # TODO: it seems that maybe dexcom of rider 3 is one date ahead in time?
     return tz
 
-def get_timezones_final(df, root_tp='/wave/hypex/data/TrainingPeaks/'):
+def get_timezones_final(df, root_tp):
 	# --------- TrainingPeaks
     # trainingpeaks timezones
     tz_tp = pd.concat({i: pd.read_csv(root_tp+f'/clean/{i}/{i}_timezone_final_list.csv', index_col=0) for i in df.RIDER.unique()})

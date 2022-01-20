@@ -24,9 +24,5 @@
 .~lock.*
 
 *.yml
-dexcom_id.csv
-
-/data_final/*.csv
-/data_final/*.xls
 
 /lib/*

@@ -10,7 +10,7 @@ import pandas as pd
 
 from helper import *
 from calc import *
-from config import rider_mapping
+from config import rider_mapping, DATA_PATH
 from timezone import get_timezones_dexcom, get_timezones_final
 
 from tqdm import tqdm
@@ -18,7 +18,7 @@ from tqdm import tqdm
 from matplotlib import pyplot as plt
 import seaborn as sns
 
-root = '/wave/hypex/data/Dexcom/'#'./data/Dexcom/'
+root = DATA_PATH+'Dexcom/'
 
 if not os.path.exists(root+'drop/'):
     os.mkdir(root+'drop/')
@@ -539,8 +539,8 @@ def main():
     df = df.drop('transmitter_order', axis=1)
     df.to_csv(root+'clean/dexcom_utc.csv')
 
-    tz = get_timezones_final(df)
-    tz.to_csv(root.rstrip('Dexcom/')+'/timezone.csv')
+    tz = get_timezones_final(df, root_tp=DATA_PATH+'TrainingPeaks/')
+    tz.to_csv(DATA_PATH+'/timezone.csv')
 
     # TODO: fix all insulin and carbs metrics
     df = utc_to_localtime(df, tz)
