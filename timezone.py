@@ -31,6 +31,7 @@ import pandas as pd
 
 import datetime
 
+from config import rider_mapping
 from helper import countries_eu
 
 # Get dates on which daylight savings time changes for relevant countries
@@ -504,9 +505,10 @@ def remove_faulty_timezones(tz):
     return tz
 
 def get_timezones_final(df, root_tp):
-	# --------- TrainingPeaks
+    athletes = rider_mapping.values()
+    # --------- TrainingPeaks
     # trainingpeaks timezones
-    tz_tp = pd.concat({i: pd.read_csv(root_tp+f'/clean/{i}/{i}_timezone_final_list.csv', index_col=0) for i in df.RIDER.unique()})
+    tz_tp = pd.concat({i: pd.read_csv(root_tp+f'/clean/{i}/{i}_timezone_final_list.csv', index_col=0) for i in athletes})
     tz_tp['date'] = pd.to_datetime(tz_tp['date'])
     tz_tp['timezone'] = pd.to_timedelta(tz_tp['timezone'])
     tz_tp = tz_tp[['date', 'timezone', 'country']]
@@ -531,7 +533,7 @@ def get_timezones_final(df, root_tp):
 
     # --------- Merge
     # fill up trainingpeaks timezones with missing dates
-    tz = pd.DataFrame(index=pd.MultiIndex.from_product([df.RIDER.unique(), pd.date_range('2014-01-01', '2021-12-31')], names=['RIDER', 'date'])).reset_index()
+    tz = pd.DataFrame(index=pd.MultiIndex.from_product([athletes, pd.date_range('2014-01-01', '2021-12-31')], names=['RIDER', 'date'])).reset_index()
     tz = pd.merge(tz, tz_tp, on=['RIDER', 'date'], how='left')
     print("Number of missing timezones: ", tz['timezone'].isna().sum())
 
