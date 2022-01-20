@@ -448,17 +448,13 @@ def check_time(df):
     """
 
 def utc_to_localtime(df, tz):
-    tz['n'] = tz.groupby('RIDER')['timezone'].transform(lambda x: (x.shift() != x).cumsum())
-    tz_gb = tz.groupby(['RIDER', 'n']).agg({'timezone' :'first', 'date':['min', 'max']})
-    tz_gb.columns = [i[0]+'_'+i[1] if i[0] == 'date' else i[0] for i in tz_gb.columns]
-
-    # recalculate local timestamp
     df = df.rename(columns={'local_timestamp':'local_timestamp_raw'})
+    df['date'] = pd.to_datetime(df.timestamp.dt.date)
 
-    for (i, _), (tz, date_min, date_max) in tz_gb.iterrows():
-        mask_tz = (df.RIDER == i) & (df.timestamp.dt.date >= date_min) & (df.timestamp.dt.date <= date_max)
-        df.loc[mask_tz, 'local_timestamp'] = df.loc[mask_tz, 'timestamp'] + tz
+    df = pd.merge(df, tz[['RIDER', 'date', 'timezone']], how='left', on=['RIDER', 'date'])
+    df['local_timestamp'] = df['timestamp'] + df['timezone']
 
+    df = df.drop(['date', 'timezone'], axis=1)
     return df
 
 def plot_time(df, i, x='local_timestamp', y='Transmitter Time (Long Integer)', hue='Transmitter ID', save_to=True):
