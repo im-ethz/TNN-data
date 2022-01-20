@@ -16,7 +16,8 @@ url_login = 'https://clarity.dexcom.com/professional/'
 
 download_path = path+'export/US/'
 
-driver_path = dr.install(browser=dr.chrome, file_directory='./lib/', verbose=True, chmod=True, overwrite=False, version='86.0.4240.22', filename=None, return_info=False)
+driver_path = dr.install(browser=dr.chrome, file_directory='./lib/', verbose=True, chmod=True, 
+    overwrite=False, version='96.0.4664.45', filename=None, return_info=False)
 options = webdriver.ChromeOptions()
 options.add_experimental_option("prefs", {"download.default_directory":download_path})
 driver = webdriver.Chrome(driver_path, options=options)
