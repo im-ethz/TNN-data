@@ -4,19 +4,18 @@
 # TODO: also look for sensor errors
 import os
 import gc
-
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
+import datetime
+
+from matplotlib import pyplot as plt
+import seaborn as sns
 
 from helper import *
 from calc import *
 from config import rider_mapping, DATA_PATH
 from timezone import get_timezones_dexcom, get_timezones_final
-
-from tqdm import tqdm
-
-from matplotlib import pyplot as plt
-import seaborn as sns
 
 root = DATA_PATH+'Dexcom/'
 
@@ -504,6 +503,65 @@ def remove_compression_errors(df):
     df = df.drop(['artifact', 'length', 'compression_low'], axis=1)
     return df
 
+def identify_hours(df):
+    """
+    Identify exercise, recovery, wake, sleep times
+    """
+    # read trainingpeaks info and round timestamps off to 5 min (to correspond dexcom timestamps)
+    df_training = pd.read_csv(DATA_PATH+'TrainingPeaks/session_times.csv', index_col=0)
+    df_training['timestamp_min'] = pd.to_datetime(df_training['timestamp_min']).round('5min')
+    df_training['timestamp_max'] = pd.to_datetime(df_training['timestamp_max']).round('5min')
+
+    # calculate timestamps during exercise and recovery
+    ts_training = {s: {i: [] for i in df.RIDER.unique()} for s in ('exercise', 'recovery')}
+    for _, (i, _, ts_min, ts_max) in df_training.iterrows():
+        ts_training['exercise'][i].append(pd.date_range(start=ts_min, end=ts_max, freq='5min').to_series())
+        ts_training['recovery'][i].append(pd.date_range(start=ts_max+pd.to_timedelta('5min'), end=ts_max+pd.to_timedelta('4h'), freq='5min').to_series())
+
+    for s in ('exercise', 'recovery'):
+        ts_training[s] = pd.concat({i: pd.concat(value) for i, value in ts_training[s].items()}).to_frame()
+        ts_training[s][s] = True
+        ts_training[s] = ts_training[s].reset_index().rename(columns={'level_0':'RIDER', 'level_1':'timestamp'})
+        ts_training[s] = ts_training[s].drop(0, axis=1)
+        ts_training[s] = ts_training[s].drop_duplicates(keep='first')
+
+    ts_training = pd.merge(*ts_training.values(), on=['RIDER', 'timestamp'], how='outer')
+    ts_training = ts_training.fillna('False')
+
+    df = pd.merge(df, ts_training, on=['RIDER', 'timestamp'], how='outer')
+    df['exercise'] = df['exercise'].fillna(False)
+    df['recovery'] = df['recovery'].fillna(False)
+
+    df['wake'] = (df.local_timestamp.dt.time >= datetime.time(6)) & (df.local_timestamp.dt.time <= datetime.time(23,59,59))
+    df['sleep'] = (df.local_timestamp.dt.time < datetime.time(6)) & (df.local_timestamp.dt.time >= datetime.time(0))
+    return df
+
+def identify_days(df):
+    """
+    Identify race and travel days
+    """
+    # race
+    race = pd.read_csv(DATA_PATH+'calendar/procyclingstats.csv', index_col=0)
+    race['date'] = pd.to_datetime(race['date'])
+    race = race[['RIDER', 'date']]
+    race['race'] = True
+    race = race.drop_duplicates()
+
+    # travel
+    timezones = pd.read_csv(DATA_PATH+'timezone.csv', index_col=0)
+    timezones['date'] = pd.to_datetime(timezones['date'])
+    travel = timezones.loc[timezones['travel'], ['RIDER', 'date', 'travel']]
+
+    df['date'] = pd.to_datetime(df.local_timestamp.dt.date)
+
+    df = pd.merge(df, race, on=['RIDER', 'date'], how='left')
+    df = pd.merge(df, travel, on=['RIDER', 'date'], how='left')
+
+    df['race'] = df['race'].fillna(False)
+    df['travel'] = df['travel'].fillna(False)
+    df = df.drop('date', axis=1)
+    return df
+
 def plot_time(df, i, x='local_timestamp', y='Transmitter Time (Long Integer)', hue='Transmitter ID', save_to=True):
     df_i = df[df.RIDER == i]
     plt.figure(figsize=(20,5))
@@ -589,7 +647,7 @@ def main():
     df = utc_to_localtime(df, tz)
     df.to_csv(root+'clean/dexcom_clean.csv')
 
-    ################ PREREQUISITE: clean/dexcom_clean.csv 
+    ################ PREREQUISITE: Dexcom/clean/dexcom_clean2.csv 
     # created with glucose function in preprocess_trainingpeaks.py
     df = pd.read_csv(root+'clean/dexcom_clean2.csv', index_col=0)
     df['timestamp'] = pd.to_datetime(df['timestamp'])
@@ -598,8 +656,19 @@ def main():
     df = resample(df)
     df.to_csv(root+'clean/dexcom_clean3.csv')
 
-    df = remove_compression_errors(df)
-    df.to_csv(root+'clean/dexcom_clean4.csv')
+    #df = remove_compression_errors(df)
+    #df.to_csv(root+'clean/dexcom_clean4.csv')
+
+    ################ PREREQUISITE: TrainingPeaks/clean/{i}/{i}_data4.csv
+    # created with features function in preprocess_trainingpeaks.py
+    # created with glucose function in preprocess_trainingpeaks.py
+    df = pd.read_csv(root+'clean/dexcom_clean3.csv', index_col=0)
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df['local_timestamp'] = pd.to_datetime(df['local_timestamp'])
+
+    df = identify_hours(df)
+    df = identify_days(df)
+    df.to_csv(root+'clean/dexcom_clean5.csv', index_label=False)
 
 if __name__ == '__main__':
     main()
