@@ -2,6 +2,7 @@ import os
 import gc
 import numpy as np
 import pandas as pd
+import re
 from tqdm import tqdm
 #from joblib import Parallel, delayed
 
@@ -385,6 +386,12 @@ def features(i, verbose=0):
 	df['timestamp'] = pd.to_datetime(df['timestamp'])
 	df['local_timestamp'] = pd.to_datetime(df['local_timestamp'])
 
+	# TODO: do this step earlier
+	# filter out weird timestamps in 2024 and 2007(that are clearly incorrect)
+	# (happens only once for athlete 14 and twice for athlete 8)
+	df = df[df.timestamp <= '2021-12-31 23:59:59']
+	df = df[df.timestamp >= '2014-01-01 00:00:00']
+
 	"""
 	print("\n-------- select devices")
 	# select devices
@@ -484,7 +491,7 @@ def features(i, verbose=0):
 
 	# -------------------- Heart rate
 	if df.heart_rate.apply(lambda x: isinstance(x, str)).any():
-		df['heart_rate'] = df['heart_rate'].replace({'\n                            ': np.nan})
+		df['heart_rate'] = df['heart_rate'].apply(lambda x: re.sub(' +', '', x) if isinstance(x, str) else x).replace({'\n':np.nan})
 	df['heart_rate'] = pd.to_numeric(df['heart_rate'])
 	print("CLEAN: heart_rate")
 
@@ -495,7 +502,7 @@ def features(i, verbose=0):
 		(df['enhanced_altitude'].notna()) & (df['altitude'].notna())).sum())
 	print("DROP: altitude (equals enhanced_altitude)")
 	df = df.drop('altitude', axis=1)
-	df = df.rename({'enhanced_altitude':'altitude'}, axis=1)
+	df = df.rename(columns={'enhanced_altitude':'altitude'})
 
 	# -------------------- Enhanced speed
 	# check if enhanced_speed equals speed
@@ -504,7 +511,7 @@ def features(i, verbose=0):
 		(df['enhanced_speed'].notna()) & (df['speed'].notna())).sum())
 	print("DROP: speed (equals enhanced_speed)")
 	df = df.drop('speed', axis=1)
-	df = df.rename({'enhanced_speed':'speed'}, axis=1)
+	df = df.rename(columns={'enhanced_speed':'speed'})
 
 	# -------------------- Elevation gain # TODO: do we use this later on?
 	df['elevation_gain'] = df.groupby('file_id')['altitude'].apply(lambda x: x.interpolate(method='linear').diff())
