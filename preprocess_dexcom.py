@@ -482,6 +482,28 @@ def resample(df, freq='5min', ts_min='2014-01-01 00:00:00', ts_max='2021-12-31 2
     df = df.drop('timezone', axis=1)
     return df
 
+def remove_compression_errors(df):
+    """
+    Remove compression lows (i.e. if dropping rate is higher than 1.5 mmol/L/5min = 27 mg/dL/5min)
+    TODO: not working yet: it can remove single measurements, but not the entire event
+    """
+    raise NotImplementedError
+
+    # calculate glucose rate
+    df['glucose_diff'] = df.groupby('RIDER')['Glucose Value (mg/dL)'].transform(lambda x: x.diff())
+    df['timestamp_diff'] = df.groupby('RIDER')['timestamp'].transform(lambda x: x.diff())
+    df['glucose_rate'] = df['glucose_diff'] / (df['timestamp_diff'] / pd.to_timedelta('5min'))
+    #df['glucose_rate_rm'] = df.set_index('timestamp').groupby('RIDER')['glucose_rate'].rolling('15min').mean().reset_index(drop=True)
+    df = df.drop(['glucose_diff', 'timestamp_diff'], axis=1)
+
+    # length and id of artefact
+    df['artifact'] = (df['glucose_rate'].abs() > 27).cumsum()
+    df['length'] = df.groupby('artifact')['timestamp'].transform(lambda x: x.max() - x.min())
+    df['compression_low'] = (df['glucose_rate'] < -27) & (df['length'] < '2h')
+    #df.loc[df['glucose_rate'] < -27, 'Glucose Value (mg/dL)'] = np.nan
+    df = df.drop(['artifact', 'length', 'compression_low'], axis=1)
+    return df
+
 def plot_time(df, i, x='local_timestamp', y='Transmitter Time (Long Integer)', hue='Transmitter ID', save_to=True):
     df_i = df[df.RIDER == i]
     plt.figure(figsize=(20,5))
