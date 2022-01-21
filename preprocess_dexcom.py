@@ -457,6 +457,31 @@ def utc_to_localtime(df, tz):
     df = df.drop(['date', 'timezone'], axis=1)
     return df
 
+def resample(df, freq='5min', ts_min='2014-01-01 00:00:00', ts_max='2021-12-31 23:55:00'):
+    """
+    resample to remove duplicates from TrainingPeaks
+    """
+    # select glucose measurements
+    df = df[df['Event Type'] == 'EGV']
+    df = df[['RIDER', 'timestamp', 'local_timestamp', 'Glucose Value (mg/dL)']]
+
+    # resample every 5 min
+    df['timezone'] = df['local_timestamp'] - df['timestamp']
+    df = df.set_index('timestamp').groupby('RIDER').resample(freq).apply({'timezone'              :'first',
+                                                                            'Glucose Value (mg/dL)' :'mean'})
+
+    # ensure there is for every 5 min a timestamp
+    ts_range = pd.date_range(start=ts_min, end=ts_max, freq=freq).to_series().rename('timestamp')
+    ts_index = pd.MultiIndex.from_product([df.index.get_level_values(0).unique(), ts_range], names=['RIDER', 'timestamp'])
+    df = df.reindex(ts_index)
+    df = df.reset_index()
+
+    # get local timestamp from resampling
+    df['timezone'] = df['timezone'].fillna(method='ffill').fillna(method='bfill')
+    df['local_timestamp'] = df['timestamp'] + df['timezone']
+    df = df.drop('timezone', axis=1)
+    return df
+
 def plot_time(df, i, x='local_timestamp', y='Transmitter Time (Long Integer)', hue='Transmitter ID', save_to=True):
     df_i = df[df.RIDER == i]
     plt.figure(figsize=(20,5))
@@ -541,6 +566,18 @@ def main():
     # TODO: fix all insulin and carbs metrics
     df = utc_to_localtime(df, tz)
     df.to_csv(root+'clean/dexcom_clean.csv')
+
+    ################ PREREQUISITE: clean/dexcom_clean.csv 
+    # created with glucose function in preprocess_trainingpeaks.py
+    df = pd.read_csv(root+'clean/dexcom_clean2.csv', index_col=0)
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df['local_timestamp'] = pd.to_datetime(df['local_timestamp'])
+
+    df = resample(df)
+    df.to_csv(root+'clean/dexcom_clean3.csv')
+
+    df = remove_compression_errors(df)
+    df.to_csv(root+'clean/dexcom_clean4.csv')
 
 if __name__ == '__main__':
     main()
