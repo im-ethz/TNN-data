@@ -334,7 +334,7 @@ def glucose():
 
 	print("\n--------------- GLUCOSE")
 
-	athletes = sorted([int(i.rstrip('.csv')) for i in os.listdir(root+'clean/')])
+	athletes = sorted([int(i) for i in os.listdir(root+'clean/')])
 	for i in athletes:
 		print("\n----------- Athlete ", i)
 		df = pd.read_csv(f'{root}clean/{i}/{i}_data2.csv')
@@ -536,8 +536,23 @@ def features(i, verbose=0):
 	# TODO: combined_pedal_smoothness
 	# TODO: zeros in the power meter
 
+def get_session_times():
+	athletes = sorted([int(i) for i in os.listdir(root+'csv/')])
+	df_training = {}
+	for i in athletes:
+		print(i)
+		df_i = pd.read_csv(f'{root}clean/{i}/{i}_data4.csv')
+		df_i['timestamp'] = pd.to_datetime(df_i['timestamp'])
+		df_training[i] = df_i.groupby('file_id').agg({'timestamp' : ['min', 'max']})
+		del df_i ; gc.collect()
+
+	df_training = pd.concat(df_training)
+	df_training.columns = ['_'.join(col) for col in df_training.columns]
+	df_training = df_training.reset_index().rename(columns={'level_0':'RIDER'})
+	df_training.to_csv(root+'session_times.csv', index_label=False)
+
 def main():
-	athletes = sorted([int(i.rstrip('.csv')) for i in os.listdir(root+'csv/')])
+	athletes = sorted([int(i) for i in os.listdir(root+'csv/')])
 
 	# merge all csv files
 	for i in athletes:
@@ -568,16 +583,8 @@ def main():
 		print("\n------------------------------- Athlete ", i)
 		features(i)
 
+	get_session_times()
 	# TODO: use timezone.csv to fillna countries and timezones
 
 if __name__ == '__main__':
 	main()
-
-"""
-	print("\n-------- identify training sessions in dexcom")
-	df_training = df.groupby('file_id').agg({'timestamp':['min', 'max']})
-
-	for n, (ts_min, ts_max) in df_training.iterrows():
-		ts_mask = (df_dc.timestamp >= ts_min) & (df_dc.timestamp <= ts_max)
-		df_dc.loc[ts_mask, 'training'] = True
-"""
