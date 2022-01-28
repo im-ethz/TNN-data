@@ -12,6 +12,8 @@ import pytz
 from tzwhere import tzwhere
 tzwhere = tzwhere.tzwhere()
 
+from scipy.stats import zscore
+
 from bike2csv.converter import Converter as Convert2CSV
 
 from config import rider_mapping_inv, DATA_PATH
@@ -512,6 +514,13 @@ def features(i, verbose=0):
 	print("DROP: speed (equals enhanced_speed)")
 	df = df.drop('speed', axis=1)
 	df = df.rename(columns={'enhanced_speed':'speed'})
+
+	# -------------------- Power
+	z = zscore(df['power'], nan_policy='omit')
+	z_extreme = (df.loc[np.abs(z) > 3, 'file_id'].value_counts() / df.groupby('file_id')['timestamp'].count()) > 0.7
+	fid_extreme = z_extreme[z_extreme].index
+	for fid in fid_extreme:
+		df.loc[df.file_id == fid, 'power'] /= 10
 
 	# -------------------- Elevation gain # TODO: do we use this later on?
 	df['elevation_gain'] = df.groupby('file_id')['altitude'].apply(lambda x: x.interpolate(method='linear').diff())
