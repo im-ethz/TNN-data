@@ -526,7 +526,10 @@ def identify_hours(df):
         ts_training[s] = ts_training[s].drop_duplicates(keep='first')
 
     ts_training = pd.merge(*ts_training.values(), on=['RIDER', 'timestamp'], how='outer')
-    ts_training = ts_training.fillna('False')
+    ts_training = ts_training.fillna(False)
+
+    # exclude exercise from recovery
+    ts_training.loc[ts_training['exercise'] & ts_training['recovery'], 'recovery'] = False
 
     df = pd.merge(df, ts_training, on=['RIDER', 'timestamp'], how='outer')
     df['exercise'] = df['exercise'].fillna(False)
