@@ -531,15 +531,16 @@ def identify_hours(df):
     # exclude recovery during exercise
     ts_training.loc[ts_training['exercise'] & ts_training['recovery'], 'recovery'] = False
 
-    # exclude sleep during exercise
-    ts_training.loc[ts_training['exercise'] & ts_training['sleep'], 'sleep'] = False
-
     df = pd.merge(df, ts_training, on=['RIDER', 'timestamp'], how='outer')
     df['exercise'] = df['exercise'].fillna(False)
     df['recovery'] = df['recovery'].fillna(False)
 
     df['wake'] = (df.local_timestamp.dt.time >= datetime.time(6)) & (df.local_timestamp.dt.time <= datetime.time(23,59,59))
     df['sleep'] = (df.local_timestamp.dt.time < datetime.time(6)) & (df.local_timestamp.dt.time >= datetime.time(0))
+
+    # exclude sleep during exercise
+    df.loc[df['exercise'] & df['sleep'], 'sleep'] = False
+    
     return df
 
 def identify_days(df):
