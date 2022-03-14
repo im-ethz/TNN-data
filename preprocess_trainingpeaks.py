@@ -543,7 +543,77 @@ def features(i, verbose=0):
 	df.to_csv(f'{root}clean/{i}/{i}_data4.csv', index_label=False)
 
 	# TODO: combined_pedal_smoothness
-	# TODO: zeros in the power meter
+
+def drop_extremes(df, feature, comp, value):
+	if comp == 'lower':
+		mask = df[feature] <= value
+	elif comp == 'higher':
+		mask = df[feature] >= value
+	elif comp == 'equal':
+		mask = df[feature] == value
+
+	if mask.sum() > 0:
+		print(f"DROP: {mask.sum()} with {feature} {comp} than {value}")
+	df.loc[mask, feature] = np.nan
+	return df
+
+def extremes(i):
+	df = pd.read_csv(f'{root}clean/{i}/{i}_data4.csv')
+
+	df['timestamp'] = pd.to_datetime(df['timestamp'])
+	df['local_timestamp'] = pd.to_datetime(df['local_timestamp'])
+
+	# heart rate
+	df = drop_extremes(df, 'heart_rate', 'lower', 0)
+	df = drop_extremes(df, 'heart_rate', 'higher', 250)
+
+	# power 
+	# note: it can happen that they do not deliver any power for a minute.
+	# should it then be 0 or nan??
+	df = drop_extremes(df, 'power', 'lower', 0)
+	df = drop_extremes(df, 'power', 'higher', 3000)
+
+	# temperature
+	df = drop_extremes(df, 'temperature', 'higher', 60)
+	df = drop_extremes(df, 'temperature', 'lower', -30)
+
+	# altitude
+	df = drop_extremes(df, 'altitude', 'lower', -500)
+	df = drop_extremes(df, 'altitude', 'higher', 5000)
+
+	# speed
+	df = drop_extremes(df, 'speed', 'higher', 300/3.6)
+	df = drop_extremes(df, 'speed', 'lower', -1e-10)
+
+	# grade
+	df = drop_extremes(df, 'grade', 'higher', 100)
+	df = drop_extremes(df, 'grade', 'lower', -100)
+
+	# cadence 
+	df = drop_extremes(df, 'cadence', 'lower', 0)
+	df = drop_extremes(df, 'cadence', 'higher', 300)
+
+	# left_torque_effectivenss
+	df = drop_extremes(df, 'left_torque_effectiveness', 'lower', -1)
+	df = drop_extremes(df, 'left_torque_effectiveness', 'higher', 101)	
+
+	# right_torque_effectivenss
+	df = drop_extremes(df, 'right_torque_effectiveness', 'lower', -1)
+	df = drop_extremes(df, 'right_torque_effectiveness', 'higher', 101)	
+
+	# combined_pedal_smoothness
+	df = drop_extremes(df, 'combined_pedal_smoothness', 'lower', -1)
+	df = drop_extremes(df, 'combined_pedal_smoothness', 'higher', 101)	
+
+	# left_pedal_smoothness
+	df = drop_extremes(df, 'left_pedal_smoothness', 'lower', -1)
+	df = drop_extremes(df, 'left_pedal_smoothness', 'higher', 101)	
+
+	# right_pedal_smoothness
+	df = drop_extremes(df, 'right_pedal_smoothness', 'lower', -1)
+	df = drop_extremes(df, 'right_pedal_smoothness', 'higher', 101)	
+
+	df.to_csv(f'{root}clean/{i}/{i}_data5.csv', index_label=False)
 
 def get_session_times():
 	athletes = sorted([int(i) for i in os.listdir(root+'csv/')])
@@ -591,6 +661,7 @@ def main():
 	for i in athletes:
 		print("\n------------------------------- Athlete ", i)
 		features(i)
+		extremes(i)
 
 	get_session_times()
 	# TODO: use timezone.csv to fillna countries and timezones
