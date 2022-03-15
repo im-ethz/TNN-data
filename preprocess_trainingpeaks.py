@@ -545,16 +545,17 @@ def features(i, verbose=0):
 	# TODO: combined_pedal_smoothness
 
 def drop_extremes(df, feature, comp, value):
-	if comp == 'lower':
-		mask = df[feature] <= value
-	elif comp == 'higher':
-		mask = df[feature] >= value
-	elif comp == 'equal':
-		mask = df[feature] == value
+	if feature in df:
+		if comp == 'lower':
+			mask = df[feature] <= value
+		elif comp == 'higher':
+			mask = df[feature] >= value
+		elif comp == 'equal':
+			mask = df[feature] == value
 
-	if mask.sum() > 0:
-		print(f"DROP: {mask.sum()} with {feature} {comp} than {value}")
-	df.loc[mask, feature] = np.nan
+		if mask.sum() > 0:
+			print(f"DROP: {mask.sum()} with {feature} {comp} than {value}")
+		df.loc[mask, feature] = np.nan
 	return df
 
 def extremes(i):
