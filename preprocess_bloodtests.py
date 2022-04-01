@@ -27,4 +27,6 @@ df.index.name = 'RIDER'
 df.index = df.index.astype(int)
 df = df.sort_index()
 
+df = df.replace({'NV':np.nan})
+
 df.to_csv(root+'HbA1c.csv')
