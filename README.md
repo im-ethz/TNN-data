@@ -2,7 +2,7 @@
 
 This repository was created to give insights into the preprocessing of the Team Novo Nordisk (TNN) cycling and diabetes data. This dataset was used in the following manuscript: "Glycemic Patterns of Male Professional Athletes With Type 1 Diabetes During Exercise, Recovery and Sleep: Retrospective, Observational Study Over an Entire Competitive Season" by E. van Weenen et al.
 
-This dataset is not publicly available to protect the privacy of the participants, but can be requested from the corresponding author upon reasonable request. The code for the analysis of this paper can be found under https://github.com/im-ethz/TNN-analysis.
+This dataset is not publicly available to protect the privacy of the participants, but can be requested in limited form from the corresponding author upon reasonable request. The code for the analysis of this paper can be found under https://github.com/im-ethz/TNN-analysis.
 
 ## Data access and processing
 Below you will find the steps used to access and process the data.
