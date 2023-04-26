@@ -44,6 +44,7 @@ df = df.drop(['Glucose Value (mg/dL)', 'Glucose Rate of Change (mg/dL/min)'], ax
 
 df.to_csv(f"{DATA_PATH}/Dexcom/dexcom_alerts.csv")
 
+"""
 # select only relevant data
 RIDERS = [1, 2, 3, 4, 5, 6, 10, 12, 13, 14, 15, 16]
 # Note: this is a result from the other repo. We just hardcode it here to save time.
@@ -77,3 +78,4 @@ df = df.drop('Glucose Rate of Change (mmol/L/min)', axis=1)
 df = df.set_index(['RIDER', 'timestamp', 'Source Device ID', 'Event Subtype'])
 df.index = df.index.swaplevel('Event Subtype', 'timestamp')
 df = df.sort_index()
+"""
